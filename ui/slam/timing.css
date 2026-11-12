@@ -1,0 +1,47 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+.timing-panel summary {
+    cursor: pointer;
+    color: #b7c6d9;
+    font-size: 12px;
+    font-weight: 600;
+}
+.timing-panel .hint {
+    font-size: 10px;
+    line-height: 1.5;
+    margin: 7px 0;
+}
+.timing-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    table-layout: fixed;
+}
+.timing-table th,
+.timing-table td {
+    padding: 4px 1px;
+    border-bottom: 1px solid #263141;
+    white-space: nowrap;
+    text-align: right;
+    font-weight: 400;
+}
+.timing-table th:first-child {
+    width: 40%;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.timing-table thead th {
+    color: var(--muted);
+}
+.timing-table tbody th {
+    color: #b7c6d9;
+}
+.timing-table td {
+    color: var(--text);
+}
+.timing-table .timing-total th,
+.timing-table .timing-total td {
+    color: var(--accent);
+    font-weight: 600;
+}

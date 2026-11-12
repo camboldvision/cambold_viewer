@@ -1,0 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+#include "resource.h"
+
+IDI_CAMBOLD ICON "cambold.ico"

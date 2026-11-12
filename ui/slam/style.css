@@ -1,0 +1,389 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+:root {
+    color-scheme: dark;
+    --bg: #10151d;
+    --panel: #181f2a;
+    --line: #2a3545;
+    --muted: #91a0b5;
+    --accent: #55c7dc;
+    --text: #e6edf6;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+    font:
+        13px/1.5 system-ui,
+        -apple-system,
+        "Segoe UI",
+        "Microsoft YaHei",
+        sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+header {
+    height: 70px;
+    display: flex;
+    gap: 9px;
+    align-items: center;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+}
+.brand {
+    min-width: 210px;
+    margin-right: 8px;
+}
+.brand b {
+    font-size: 20px;
+    letter-spacing: 0.3px;
+}
+.brand span {
+    font-weight: 400;
+    color: var(--accent);
+}
+small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+}
+.brand small {
+    letter-spacing: 1px;
+}
+button,
+input,
+select {
+    font: inherit;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--text);
+    background: #202b3b;
+    padding: 6px 9px;
+}
+button {
+    cursor: pointer;
+    white-space: nowrap;
+}
+button:hover {
+    background: #31445a;
+    border-color: #66829c;
+}
+button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.primary {
+    background: #176175;
+    border-color: #287c8c;
+}
+input:focus,
+select:focus {
+    outline: 1px solid var(--accent);
+}
+input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    margin: 0 8px 0 0;
+}
+header select {
+    width: 210px;
+}
+.badge {
+    font-size: 11px;
+    color: #a4bacd;
+    background: #263448;
+    border-radius: 20px;
+    padding: 4px 10px;
+    margin-left: auto;
+}
+.badge.ready {
+    color: #8de4c2;
+    background: #21443c;
+}
+[hidden] {
+    display: none !important;
+}
+#error {
+    background: #552b29;
+    color: #ffd6ce;
+    padding: 7px 18px;
+    max-height: 60px;
+    overflow: auto;
+}
+main {
+    display: grid;
+    grid-template-columns: 235px minmax(400px, 1fr) 280px;
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    flex: 1;
+}
+aside {
+    background: var(--panel);
+    min-height: 0;
+    overflow-y: auto;
+}
+.left {
+    border-right: 1px solid var(--line);
+}
+.right {
+    border-left: 1px solid var(--line);
+}
+section {
+    padding: 14px;
+    border-bottom: 1px solid var(--line);
+}
+h2 {
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #b7c6d9;
+}
+.actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+}
+label {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+    cursor: pointer;
+}
+.hint {
+    color: var(--muted);
+    font-size: 11px;
+    margin: 8px 0 0;
+}
+dl {
+    display: grid;
+    grid-template-columns: 76px 1fr;
+    gap: 5px;
+    margin: 12px 0 0;
+    font-size: 12px;
+}
+dt {
+    color: var(--muted);
+}
+dd {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+#run {
+    font-size: 10px;
+}
+.center {
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+.scene-toolbar {
+    height: 36px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    color: var(--muted);
+    font-size: 10px;
+    border-bottom: 1px solid #242e3a;
+    letter-spacing: 0.5px;
+}
+.scene-toolbar i {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin: 0 4px 1px 8px;
+}
+.green {
+    background: #35eb7f;
+}
+.amber {
+    background: #f5b858;
+}
+#scene {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: #101720;
+}
+#scene > canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+#scene-message {
+    position: absolute;
+    top: 14px;
+    left: 18px;
+    color: var(--muted);
+    pointer-events: none;
+    z-index: 1;
+    font-size: 12px;
+}
+.pose-bar {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 12px 18px;
+    background: #161e29;
+    border-block: 1px solid var(--line);
+}
+.pose-bar b {
+    display: block;
+    font:
+        12px/1.6 ui-monospace,
+        Consolas,
+        monospace;
+    font-weight: 400;
+}
+.diagnostics {
+    display: grid;
+    grid-template-columns: 1fr 1fr 150px;
+    gap: 12px;
+    height: 155px;
+    flex-shrink: 0;
+    padding: 10px 14px;
+}
+.diagnostics h2 {
+    margin-bottom: 4px;
+    font-size: 11px;
+}
+.diagnostics canvas {
+    width: 100%;
+    height: 96px;
+}
+.diagnostics dl {
+    grid-template-columns: 68px 1fr;
+    font-size: 10px;
+    margin: 16px 0;
+}
+.image-wrap {
+    position: relative;
+    background: #0b1018;
+    border: 1px solid var(--line);
+    overflow: hidden;
+}
+.image-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    color: var(--muted);
+    font-size: 12px;
+}
+.image-wrap img:not([src]) {
+    min-height: 120px;
+}
+.right section {
+    padding: 10px 12px;
+}
+.right h2 {
+    margin-bottom: 6px;
+}
+.right small {
+    font-size: 10px;
+    margin-top: 5px;
+}
+.log-panel {
+    min-height: 130px;
+}
+pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font:
+        10px/1.5 ui-monospace,
+        Consolas,
+        monospace;
+    color: var(--muted);
+    max-height: 180px;
+    overflow: auto;
+    margin: 0;
+}
+@media (max-width: 1200px) {
+    main {
+        grid-template-columns: 210px minmax(360px, 1fr) 230px;
+    }
+    .brand {
+        min-width: 170px;
+    }
+    .brand b {
+        font-size: 17px;
+    }
+    header {
+        gap: 6px;
+        padding-inline: 10px;
+    }
+    header select {
+        width: 180px;
+    }
+    .diagnostics {
+        grid-template-columns: 1fr 1fr;
+        height: 135px;
+    }
+    .diagnostics dl {
+        display: none;
+    }
+    .pose-bar {
+        padding: 9px;
+        font-size: 10px;
+        gap: 6px;
+    }
+    .pose-bar b {
+        font-size: 10px;
+    }
+}
+
+.map-controls > select,
+.map-controls input[type="text"] {
+    width: 100%;
+    min-width: 0;
+}
+.map-controls label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+}
+.map-picker {
+    display: flex;
+    gap: 5px;
+}
+.map-picker select {
+    flex: 1;
+    min-width: 0;
+}
+.map-controls .hint {
+    min-height: 48px;
+}
+.map-controls dl {
+    grid-template-columns: 64px 1fr;
+}
+
+/* Frame metadata sets the bounds after applying the viewing orientation. */
+.image-wrap {
+    min-height: 120px;
+}
+.image-wrap img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    height: 100%;
+    transform: translate(-50%, -50%);
+}

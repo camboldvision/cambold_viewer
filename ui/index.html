@@ -1,0 +1,362 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>CamBold</title>
+        <link rel="icon" type="image/svg+xml" href="/assets/cambold.svg" />
+        <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
+        <link rel="stylesheet" href="/style.css" />
+    </head>
+    <body>
+        <header class="topbar">
+            <div class="brand">
+                <img
+                    class="brand-logo"
+                    src="/assets/cambold.svg"
+                    width="44"
+                    height="44"
+                    alt="CamBold"
+                />
+                <div class="brand-copy">
+                    <h1 id="device-name">CamBold</h1>
+                    <div id="ports" class="subtle">Searching for camera...</div>
+                </div>
+            </div>
+            <div class="top-right">
+                <div class="top-status" aria-label="Device status">
+                    <div class="top-metric">
+                        <span>CPU</span><strong id="cpu">--</strong>
+                    </div>
+                    <div class="top-metric">
+                        <span>Memory</span><strong id="memory">--</strong>
+                    </div>
+                    <div class="top-metric">
+                        <span>Temp</span><strong id="temperature">--</strong>
+                    </div>
+                    <div class="top-metric">
+                        <span>Image</span
+                        ><strong id="image-rate">0.0 Hz</strong>
+                    </div>
+                    <div class="top-metric">
+                        <span>IMU</span><strong id="imu-rate">0.0 Hz</strong>
+                    </div>
+                    <button
+                        id="theme-toggle"
+                        class="toolbar-button"
+                        type="button"
+                        aria-pressed="false"
+                    >
+                        Night mode
+                    </button>
+                    <span id="connection" class="badge offline">offline</span>
+                </div>
+                <div class="top-controls">
+                    <label for="fps">Frame rate</label>
+                    <select id="fps" aria-label="Frame rate" disabled>
+                        <option value="">Waiting for board...</option>
+                    </select>
+                    <label for="antenna">Antenna</label>
+                    <select id="antenna" disabled>
+                        <option value="" selected disabled>
+                            Waiting for board...
+                        </option>
+                        <option value="0">Ceramic antenna</option>
+                        <option value="1">Wired antenna</option>
+                    </select>
+                    <label class="top-check"
+                        ><input id="imu-output" type="checkbox" disabled /> IMU
+                        output</label
+                    >
+                    <button id="bag-action" type="button">
+                        Record rosbag...
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <nav class="tabs" role="tablist" aria-label="Application sections">
+            <button
+                class="tab active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="tab-camera"
+                data-tab="tab-camera"
+            >
+                Camera
+            </button>
+            <button
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-terminal"
+                data-tab="tab-terminal"
+            >
+                Terminal
+            </button>
+            <button
+                class="tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-slam"
+                data-tab="tab-slam"
+            >
+                SLAM
+            </button>
+        </nav>
+
+        <main class="tab-panels">
+            <section id="tab-camera" class="tab-panel active" role="tabpanel">
+                <div class="layout">
+                    <section class="card preview-card">
+                        <div class="card-title">
+                            <h2>Live preview</h2>
+                            <span class="subtle">2160 x 1280 MJPEG</span>
+                        </div>
+                        <div class="preview-wrap">
+                            <img
+                                id="preview"
+                                alt="CamBold stereo MJPEG preview"
+                                hidden
+                            />
+                            <div id="preview-empty" class="empty">
+                                Start preview to open the native UVC stream
+                            </div>
+                        </div>
+                        <div class="toolbar preview-toolbar">
+                            <button id="preview-toggle" type="button">
+                                Start preview
+                            </button>
+                        </div>
+                    </section>
+
+                    <section
+                        class="card stereo-card"
+                        aria-label="Rectified RGB, disparity and 3D point cloud"
+                    >
+                        <section class="disparity-panel">
+                            <div class="card-title">
+                                <h2>Rectified RGB / disparity</h2>
+                                <span id="disparity-rate" class="subtle"
+                                    >-- Hz</span
+                                >
+                            </div>
+                            <div class="stereo-controls toolbar">
+                                <label for="stereo-usage">Camera use</label
+                                ><select id="stereo-usage" disabled>
+                                    <option value="0">
+                                        Horizontal · Perspective
+                                    </option>
+                                    <option value="1">
+                                        Vertical · Cylindrical
+                                    </option>
+                                </select>
+                                <label for="stereo-mode"
+                                    >Aspect / resolution</label
+                                ><select id="stereo-mode" disabled></select>
+                                <label for="stereo-focal"
+                                    >Horizontal focal length (px)</label
+                                ><input
+                                    id="stereo-focal"
+                                    type="number"
+                                    step="any"
+                                    min="0"
+                                    disabled
+                                />
+                                <label
+                                    for="stereo-fov"
+                                    id="stereo-fov-label"
+                                    hidden
+                                    >Vertical FOV (°)</label
+                                ><input
+                                    id="stereo-fov"
+                                    type="number"
+                                    min="30"
+                                    max="180"
+                                    step="any"
+                                    value="180"
+                                    disabled
+                                    hidden
+                                />
+                                <button id="stereo-apply" disabled>Apply</button
+                                ><button id="stereo-enable" disabled>
+                                    Enable disparity
+                                </button>
+                            </div>
+                            <p
+                                id="stereo-notice"
+                                class="stereo-notice"
+                                role="status"
+                            >
+                                Waiting for board stereo capabilities...
+                            </p>
+                            <div
+                                class="stereo-image-pair"
+                                role="group"
+                                aria-label="Same-frame rectified RGB and disparity"
+                            >
+                                <figure class="stereo-image">
+                                    <figcaption>Rectified left RGB</figcaption>
+                                    <div class="disparity-wrap">
+                                        <canvas
+                                            id="rectified-canvas"
+                                            aria-label="Same-frame rectified left RGB image"
+                                            hidden
+                                        ></canvas>
+                                        <div id="rectified-empty" class="empty">
+                                            Enable disparity to view the
+                                            rectified left image
+                                        </div>
+                                    </div>
+                                </figure>
+                                <figure class="stereo-image">
+                                    <figcaption>Disparity · FP16</figcaption>
+                                    <div class="disparity-wrap">
+                                        <canvas
+                                            id="disparity-canvas"
+                                            aria-label="Same-frame FP16 disparity image"
+                                            hidden
+                                        ></canvas>
+                                        <div id="disparity-empty" class="empty">
+                                            Enable disparity to start stereo
+                                            matching
+                                        </div>
+                                    </div>
+                                </figure>
+                            </div>
+                            <p
+                                id="stereo-rate-note"
+                                class="subtle stereo-legend"
+                            >
+                                Disparity: blue = near 0 px, red = 192 px; black
+                                = invalid. Frame rate limits are provided by the
+                                camera for each mode.
+                            </p>
+                        </section>
+                        <section id="cloud-card" class="cloud-panel">
+                            <div class="card-title">
+                                <h2>3D colored point cloud</h2>
+                                <span id="cloud-count" class="subtle"
+                                    >0 points</span
+                                >
+                            </div>
+                            <div class="cloud-wrap">
+                                <canvas
+                                    id="cloud-canvas"
+                                    aria-label="Interactive rectified camera point cloud"
+                                ></canvas>
+                            </div>
+                            <div class="toolbar">
+                                <button id="cloud-reset">Reset view</button
+                                ><label
+                                    >Depth limit (m)
+                                    <input
+                                        id="cloud-depth"
+                                        type="number"
+                                        value="10"
+                                        min="0.1"
+                                        max="1000"
+                                        step="0.5" /></label
+                                ><span class="subtle"
+                                    >Left drag: free rotation · Right / middle /
+                                    Shift drag: pan · Scroll: zoom ·
+                                    Metres</span
+                                >
+                            </div>
+                        </section>
+                    </section>
+                </div>
+            </section>
+
+            <section
+                id="tab-terminal"
+                class="tab-panel terminal-panel"
+                role="tabpanel"
+                hidden
+            >
+                <section class="card terminal-card">
+                    <div id="terminal" class="terminal" tabindex="0"></div>
+                </section>
+            </section>
+            <section id="tab-slam" class="tab-panel" role="tabpanel" hidden>
+                <iframe
+                    id="slam-view"
+                    src="/slam/index.html"
+                    title="CamBold SLAM"
+                    style="width: 100%; height: 100%; border: 0; min-height: 0"
+                ></iframe>
+            </section>
+        </main>
+
+        <div id="bag-modal" class="modal" hidden>
+            <div
+                class="modal-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="bag-modal-title"
+            >
+                <div class="modal-title">
+                    <h2 id="bag-modal-title">Record rosbag</h2>
+                    <button
+                        id="bag-close"
+                        class="close-button"
+                        type="button"
+                        aria-label="Close"
+                    >
+                        x
+                    </button>
+                </div>
+                <label class="field-label" for="bag-name">File name</label>
+                <div class="field-with-button">
+                    <input
+                        id="bag-name"
+                        value="capture.bag"
+                        placeholder="capture.bag"
+                        autocomplete="off"
+                    />
+                    <button id="bag-browse" class="secondary" type="button">
+                        Choose...
+                    </button>
+                </div>
+                <p class="modal-notice">
+                    The rosbag will be saved on this computer.
+                </p>
+                <fieldset>
+                    <legend>Data to record</legend>
+                    <label
+                        ><input id="bag-image" type="checkbox" checked />
+                        Images</label
+                    >
+                    <label
+                        ><input id="bag-imu" type="checkbox" checked />
+                        IMU</label
+                    >
+                </fieldset>
+                <div
+                    id="bag-error"
+                    class="validation-error"
+                    role="alert"
+                    hidden
+                ></div>
+                <div class="modal-actions">
+                    <button id="bag-cancel" class="secondary" type="button">
+                        Cancel
+                    </button>
+                    <button id="bag-start" type="button">
+                        Start recording
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script src="/vendor/xterm/xterm.js"></script>
+        <script src="/vendor/xterm/addon-fit.js"></script>
+        <script src="/terminal.js"></script>
+        <script src="/stereo.js"></script>
+        <script src="/app.js"></script>
+    </body>
+</html>

@@ -1,0 +1,821 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+:root {
+    color-scheme: light;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    background: #eef1f5;
+    color: #20252b;
+    --app-bg: #eef1f5;
+    --chrome: #f8f9fb;
+    --chrome-alt: #e8ecf0;
+    --terminal-bg: #ffffff;
+    --border: #c7ced7;
+    --panel: #ffffff;
+    --panel-soft: #f5f7f9;
+    --text-soft: #5d6a78;
+    --accent: #0b6eaf;
+    --accent-dark: #075986;
+}
+
+* {
+    box-sizing: border-box;
+}
+html,
+body {
+    width: 100%;
+    height: 100%;
+}
+html {
+    overflow: hidden;
+}
+body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--app-bg);
+}
+
+.topbar {
+    min-height: 66px;
+    flex: 0 0 auto;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    background: var(--chrome);
+    border-bottom: 1px solid var(--border);
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-width: 220px;
+}
+.brand-logo {
+    display: block;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 auto;
+}
+.brand-copy {
+    min-width: 0;
+}
+.brand-copy h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+h1 {
+    margin: 0 0 3px;
+    color: #1e2d3d;
+    font-size: 18px;
+    font-weight: 600;
+}
+h2 {
+    margin: 0;
+    color: #27384a;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.subtle {
+    color: var(--text-soft);
+    font-size: 12px;
+}
+.top-right {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 7px;
+    min-width: 0;
+}
+.top-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 14px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+.top-metric {
+    min-width: 54px;
+    text-align: right;
+    white-space: nowrap;
+}
+.top-metric span {
+    display: block;
+    color: var(--text-soft);
+    font-size: 10px;
+}
+.top-metric strong {
+    display: block;
+    color: #21384d;
+    font-size: 13px;
+    font-weight: 600;
+}
+.top-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-height: 28px;
+    flex-wrap: wrap;
+}
+.top-controls label {
+    color: #526171;
+    font-size: 12px;
+}
+.top-controls select {
+    min-height: 29px;
+    padding: 3px 8px;
+}
+.top-check {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+}
+.badge {
+    border: 1px solid #c4cbd3;
+    border-radius: 3px;
+    padding: 5px 9px;
+    color: #596674;
+    background: #eef1f4;
+    font-size: 12px;
+}
+.badge.online {
+    border-color: #78b895;
+    color: #176c39;
+    background: #e8f5ec;
+}
+.badge.waiting {
+    border-color: #d7b56a;
+    color: #78570f;
+    background: #fff8df;
+}
+
+.tabs {
+    flex: 0 0 42px;
+    display: flex;
+    align-items: end;
+    gap: 2px;
+    padding: 0 18px;
+    background: #e8ecf0;
+    border-bottom: 1px solid var(--border);
+}
+.tab {
+    min-height: 36px;
+    padding: 8px 18px;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: 4px 4px 0 0;
+    background: transparent;
+    color: #526171;
+}
+.tab:hover {
+    background: #f5f7f9;
+    color: #21384d;
+}
+.tab.active {
+    color: #1e2d3d;
+    border-color: var(--border);
+    background: #fff;
+}
+
+.tab-panels {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+}
+.tab-panel {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+.tab-panel[hidden] {
+    display: none;
+}
+.tab-panel.active {
+    display: flex;
+}
+#tab-camera.tab-panel.active {
+    overflow: hidden;
+    scrollbar-color: #a8b4c0 var(--app-bg);
+}
+#tab-camera::-webkit-scrollbar {
+    width: 12px;
+}
+#tab-camera::-webkit-scrollbar-track {
+    background: #eef1f5;
+}
+#tab-camera::-webkit-scrollbar-thumb {
+    background: #a8b4c0;
+    border: 3px solid #eef1f5;
+    border-radius: 6px;
+}
+
+.layout {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    align-content: stretch;
+    gap: 14px;
+    padding: 14px;
+}
+.card {
+    min-width: 0;
+    padding: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(35, 51, 68, 0.08);
+}
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 11px;
+}
+.card-title .subtle {
+    margin-left: auto;
+}
+.preview-card {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.preview-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    height: auto;
+    aspect-ratio: auto;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #0d1116;
+    border: 1px solid #222c36;
+    border-radius: 3px;
+}
+/* Keep the complete 2160:1280 frame visible regardless of the panel shape.
+ * Using auto dimensions together with both max constraints avoids a browser
+ * treating the video element as a cover-sized box before object-fit runs. */
+.preview-wrap video,
+.preview-wrap img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 2160 / 1280;
+    object-fit: contain !important;
+    object-position: center center;
+}
+.preview-wrap img[hidden] {
+    display: none;
+}
+/* Fit against the rotated bounds, including non-square UVC frames. */
+.preview-wrap img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    max-width: none;
+    max-height: none;
+    transform: translate(-50%, -50%);
+}
+.field-with-button {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+.field-with-button input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.empty {
+    color: #a8b4c0;
+    font-size: 13px;
+}
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    margin-top: 11px;
+}
+.preview-toolbar {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+.grow {
+    flex: 1;
+    min-width: 120px;
+}
+button,
+select,
+input {
+    min-height: 34px;
+    font: inherit;
+    border: 1px solid #b9c3ce;
+    border-radius: 3px;
+    background: #fff;
+    color: #20252b;
+    padding: 6px 10px;
+}
+input[type="checkbox"],
+input[type="radio"] {
+    width: 14px;
+    height: 14px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--accent);
+}
+button {
+    cursor: pointer;
+    border-color: #1577b5;
+    background: var(--accent);
+    color: #fff;
+}
+button:hover {
+    background: var(--accent-dark);
+}
+button.secondary,
+.toolbar-button {
+    border-color: #adb8c3;
+    background: #f1f3f5;
+    color: #27384a;
+}
+button.secondary:hover,
+.toolbar-button:hover {
+    background: #e5e9ed;
+}
+button.danger {
+    border-color: #ad4c4c;
+    background: #b53c3c;
+}
+button.danger:hover {
+    background: #962f2f;
+}
+label {
+    color: #3b4a58;
+    font-size: 13px;
+}
+input[type="text"],
+input:not([type]) {
+    width: 100%;
+}
+code {
+    padding: 1px 3px;
+    border-radius: 2px;
+    background: #eef1f4;
+    font-family: Consolas, monospace;
+}
+
+.terminal-panel {
+    padding: 12px;
+    min-height: 0;
+    overflow: hidden;
+    background: #e8ecf0;
+}
+.terminal-card {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+}
+.terminal {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    padding: 8px;
+    background: #080d13;
+    border: 1px solid #263542;
+    border-radius: 3px;
+}
+.terminal .xterm {
+    height: 100%;
+}
+.terminal .xterm-viewport {
+    overflow-x: hidden !important;
+    overflow-y: scroll !important;
+    scrollbar-color: #52677c #080d13;
+}
+.terminal .xterm-viewport::-webkit-scrollbar {
+    width: 12px;
+}
+.terminal .xterm-viewport::-webkit-scrollbar-track {
+    background: #080d13;
+}
+.terminal .xterm-viewport::-webkit-scrollbar-thumb {
+    background: #52677c;
+    border-radius: 5px;
+    border: 2px solid #080d13;
+}
+.terminal .xterm-scrollable-element > .scrollbar,
+.terminal .xterm-scrollable-element > .scrollbar.visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+.terminal .xterm-scrollable-element > .scrollbar > .slider {
+    background: #52677c !important;
+    min-width: 10px;
+    border-radius: 5px;
+}
+.terminal .xterm-selection {
+    background-color: #28516e !important;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(25, 35, 46, 0.38);
+}
+.modal[hidden] {
+    display: none;
+}
+.modal-dialog {
+    width: min(430px, 100%);
+    padding: 18px;
+    background: #fff;
+    border: 1px solid #aeb9c4;
+    border-radius: 5px;
+    box-shadow: 0 12px 36px rgba(23, 38, 52, 0.3);
+}
+.modal-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+.modal-title h2 {
+    text-transform: none;
+    font-size: 16px;
+    letter-spacing: 0;
+}
+.close-button {
+    min-width: 32px;
+    min-height: 30px;
+    padding: 2px 8px;
+    border: 0;
+    background: transparent;
+    color: #596674;
+    font-size: 22px;
+    line-height: 1;
+}
+.close-button:hover {
+    background: #eef1f4;
+    color: #20252b;
+}
+.field-label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.modal-dialog > input {
+    width: 100%;
+}
+.modal-notice {
+    margin: 8px 0 0;
+    color: var(--text-soft);
+    font-size: 12px;
+    line-height: 1.4;
+}
+.validation-error {
+    margin: 9px 0 0;
+    color: #a52828;
+    font-size: 12px;
+}
+html[data-theme="dark"] .validation-error {
+    color: #ffaaa6;
+}
+fieldset {
+    display: flex;
+    gap: 18px;
+    margin: 16px 0;
+    padding: 11px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+}
+fieldset label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 24px;
+}
+legend {
+    padding: 0 5px;
+    color: var(--text-soft);
+    font-size: 12px;
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Night theme. The same spacing and hierarchy are retained; only the
+   surfaces, borders and text colors change so controls stay in the same
+   place when the user switches themes. */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --app-bg: #171b21;
+    --chrome: #20252c;
+    --chrome-alt: #2a3038;
+    --panel: #242a32;
+    --panel-soft: #2b323b;
+    --border: #46515e;
+    --text-soft: #aab5c1;
+    --accent: #2587c3;
+    --accent-dark: #1d6f9f;
+    --terminal-bg: #0b1016;
+    background: var(--app-bg);
+    color: #e8edf3;
+}
+html[data-theme="dark"] body {
+    background: var(--app-bg);
+}
+html[data-theme="dark"] .topbar {
+    background: var(--chrome);
+    border-color: var(--border);
+}
+html[data-theme="dark"] .tabs {
+    background: var(--chrome-alt);
+    border-color: var(--border);
+}
+html[data-theme="dark"] .tab {
+    color: #b4c0cc;
+}
+html[data-theme="dark"] .tab:hover {
+    background: #333b45;
+    color: #fff;
+}
+html[data-theme="dark"] .tab.active {
+    background: var(--panel);
+    border-color: var(--border);
+    color: #fff;
+}
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] .top-metric strong {
+    color: #f0f4f8;
+}
+html[data-theme="dark"] label,
+html[data-theme="dark"] .top-controls label {
+    color: #d3dce5;
+}
+html[data-theme="dark"] .subtle,
+html[data-theme="dark"] .empty,
+html[data-theme="dark"] .modal-notice {
+    color: #c1cbd6;
+}
+html[data-theme="dark"] input::placeholder {
+    color: #aeb8c2;
+}
+html[data-theme="dark"] .card {
+    background: var(--panel);
+    border-color: var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+html[data-theme="dark"] button,
+html[data-theme="dark"] select,
+html[data-theme="dark"] input {
+    background: #2d353f;
+    border-color: #586675;
+    color: #f0f4f8;
+}
+html[data-theme="dark"] button.secondary,
+html[data-theme="dark"] .toolbar-button {
+    background: #303945;
+    border-color: #5b6877;
+    color: #e8edf3;
+}
+html[data-theme="dark"] button.secondary:hover,
+html[data-theme="dark"] .toolbar-button:hover {
+    background: #3b4652;
+}
+html[data-theme="dark"] .badge {
+    background: #2d353f;
+    border-color: #586675;
+    color: #c1ccd7;
+}
+html[data-theme="dark"] .badge.online {
+    background: #1c3c30;
+    border-color: #4f9670;
+    color: #a9e6bf;
+}
+html[data-theme="dark"] .badge.waiting {
+    background: #463b21;
+    border-color: #a78c4b;
+    color: #f1d78d;
+}
+html[data-theme="dark"] code {
+    background: #303945;
+    color: #e8edf3;
+}
+html[data-theme="dark"] .terminal-panel {
+    background: var(--chrome-alt);
+}
+html[data-theme="dark"] .terminal {
+    background: var(--terminal-bg);
+    border-color: #465463;
+}
+html[data-theme="dark"] .modal-dialog {
+    background: #242a32;
+    border-color: #586675;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+html[data-theme="dark"] .close-button {
+    color: #c4ced8;
+}
+html[data-theme="dark"] .close-button:hover {
+    background: #303945;
+    color: #fff;
+}
+html[data-theme="dark"] fieldset {
+    border-color: var(--border);
+}
+
+@media (max-width: 1000px) {
+    .top-status {
+        gap: 8px;
+    }
+    .top-metric {
+        min-width: 45px;
+    }
+}
+@media (max-width: 650px) {
+    .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .top-right {
+        width: 100%;
+        align-items: flex-start;
+    }
+    .top-status {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+    .layout {
+        padding: 10px;
+    }
+    .preview-toolbar {
+        flex-wrap: wrap;
+    }
+}
+
+/* Keep the paired rectified images above their point cloud in the right column. */
+.stereo-card {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.disparity-panel {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 290px;
+}
+.stereo-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 0;
+}
+.stereo-controls input {
+    width: 95px;
+}
+.stereo-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.stereo-notice,
+.stereo-legend {
+    margin: 8px 0;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+.stereo-image-pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    flex: 1;
+    min-height: 150px;
+}
+.stereo-image {
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.stereo-image figcaption {
+    color: var(--text-soft);
+    font-size: 12px;
+}
+.disparity-wrap {
+    position: relative;
+    min-height: 130px;
+    display: grid;
+    place-items: center;
+    flex: 1;
+    overflow: hidden;
+    background: #0b101a;
+    border-radius: 3px;
+}
+#rectified-canvas,
+#disparity-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+#disparity-canvas {
+    image-rendering: pixelated;
+}
+.disparity-wrap .empty {
+    padding: 12px;
+    text-align: center;
+}
+.cloud-panel {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 1 0 230px;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+    padding-top: 14px;
+}
+.cloud-panel .card-title {
+    flex-wrap: wrap;
+}
+.cloud-panel .toolbar .subtle {
+    flex-basis: 100%;
+}
+.cloud-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 130px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: #0b101a;
+}
+#cloud-canvas {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: grab;
+}
+#cloud-depth {
+    width: 75px;
+}
+[hidden] {
+    display: none !important;
+}
+@media (max-width: 900px) {
+    #tab-camera.tab-panel.active {
+        overflow-y: auto;
+    }
+    .layout {
+        height: auto;
+        min-height: 100%;
+        grid-template-columns: minmax(0, 1fr);
+        align-content: start;
+    }
+    .preview-card {
+        height: 60vh;
+        min-height: 300px;
+    }
+    .stereo-card {
+        min-height: 740px;
+        overflow: visible;
+    }
+}

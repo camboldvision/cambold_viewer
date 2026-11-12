@@ -1,0 +1,246 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>CamBold SLAM</title>
+        <link rel="stylesheet" href="style.css" />
+        <link rel="stylesheet" href="timing.css" />
+    </head>
+    <body>
+        <header>
+            <div class="brand">
+                <b>CamBold <span>SLAM</span></b
+                ><small>双目惯性 SLAM · 稀疏 / 稠密建图</small>
+            </div>
+            <select id="port" aria-label="SDK 设备通道">
+                <option value="">自动识别 SDK 设备</option>
+            </select>
+            <button id="scan">刷新</button
+            ><button id="connect" class="primary">连接</button
+            ><button id="disconnect">断开</button>
+            <span id="connection" class="badge">DISCONNECTED</span>
+        </header>
+        <div id="error" role="status" hidden></div>
+        <main>
+            <aside class="left">
+                <section class="map-controls">
+                    <h2>地图与运行模式</h2>
+                    <label for="map-mode">运行模式</label
+                    ><select id="map-mode">
+                        <option value="new">重新建图</option>
+                        <option value="resume">继续建图</option>
+                        <option value="localization">纯定位</option>
+                    </select>
+                    <label for="map-select">已保存地图</label>
+                    <div class="map-picker">
+                        <select id="map-select">
+                            <option value="">等待连接设备</option></select
+                        ><button id="refresh-maps" title="刷新板端地图列表">
+                            刷新
+                        </button>
+                    </div>
+                    <div id="map-name-row">
+                        <label for="map-name">地图名称</label
+                        ><input
+                            id="map-name"
+                            type="text"
+                            maxlength="80"
+                            placeholder="例如：office_1"
+                            autocomplete="off"
+                        />
+                    </div>
+                    <p id="map-hint" class="hint">
+                        选择模式和地图后启动；建图结果在停止时自动保存。
+                    </p>
+                    <p id="camera-configuration" class="hint">
+                        启动时自动配置相机分辨率与帧率；加载地图时恢复地图的相机参数。
+                    </p>
+                    <label
+                        ><input
+                            id="dense-reconstruction"
+                            type="checkbox"
+                            checked
+                            disabled
+                        />执行稠密重建</label
+                    >
+                    <p id="reconstruction-hint" class="hint">
+                        生成彩色稠密地图。运行期间关闭 SDK 的 IMU
+                        上传，相机继续使用 IMU 进行定位。
+                    </p>
+                    <div class="actions">
+                        <button
+                            id="start"
+                            disabled
+                            data-command="START"
+                            class="primary"
+                        >
+                            启动</button
+                        ><button id="stop" disabled data-command="STOP">
+                            停止并保存
+                        </button>
+                    </div>
+                    <dl>
+                        <dt>当前地图</dt>
+                        <dd id="active-map">—</dd>
+                        <dt>定位状态</dt>
+                        <dd id="localization-state">—</dd>
+                        <dt>保存状态</dt>
+                        <dd id="map-save-state">—</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h2>运行状态</h2>
+                    <dl>
+                        <dt>状态</dt>
+                        <dd id="algorithm">IDLE</dd>
+                        <dt>Run</dt>
+                        <dd id="run">—</dd>
+                        <dt>Epoch</dt>
+                        <dd id="epoch">—</dd>
+                        <dt>关键帧</dt>
+                        <dd id="map-nodes">0</dd>
+                        <dt id="loops-label">回环</dt>
+                        <dd id="loops">0</dd>
+                        <dt>往返延迟</dt>
+                        <dd id="rtt">—</dd>
+                        <dt>位姿频率</dt>
+                        <dd id="pose-rate">—</dd>
+                    </dl>
+                </section>
+                <section>
+                    <h2>显示图层</h2>
+                    <label
+                        ><input
+                            id="show-grid"
+                            type="checkbox"
+                            checked
+                        />网格与世界坐标</label
+                    ><label
+                        ><input
+                            id="show-body"
+                            type="checkbox"
+                            checked
+                        />实时位姿视锥</label
+                    ><label
+                        ><input
+                            id="show-keyframes"
+                            type="checkbox"
+                            checked
+                        />关键帧视锥</label
+                    ><label
+                        ><input
+                            id="show-dense"
+                            type="checkbox"
+                            checked
+                        />地图点云</label
+                    ><label><input id="follow" type="checkbox" />跟随相机</label
+                    ><label
+                        ><input
+                            id="pause-view"
+                            type="checkbox"
+                        />暂停显示</label
+                    >
+                    <div class="actions">
+                        <button id="home">复位视角</button
+                        ><button id="top">俯视</button
+                        ><button id="clear">清除显示</button>
+                    </div>
+                </section>
+                <section>
+                    <h2>数据订阅</h2>
+                    <label
+                        ><input
+                            id="images"
+                            type="checkbox"
+                            checked
+                        />左目跟踪图</label
+                    ><label
+                        ><input
+                            id="dense"
+                            type="checkbox"
+                            checked
+                        />地图点云</label
+                    >
+                    <p class="hint">
+                        左图显示实际跟踪的特征点，绿色框标出地图路标。地图按关键帧增量更新。
+                    </p>
+                </section>
+            </aside>
+            <div class="center">
+                <div class="scene-toolbar">
+                    <span>MAP · Z UP</span
+                    ><span><i class="green"></i>实时位姿 · 黄色关键帧</span
+                    ><span id="point-count">0 点 · 0 关键帧视锥</span>
+                </div>
+                <div id="scene">
+                    <div id="scene-message">正在等待 SDK 连接</div>
+                </div>
+                <div class="pose-bar">
+                    <div><small>位置 · m</small><b id="position">—</b></div>
+                    <div>
+                        <small>四元数 · Hamilton xyzw</small
+                        ><b id="orientation">—</b>
+                    </div>
+                    <div><small>速度 · m/s</small><b id="velocity">—</b></div>
+                </div>
+                <section class="diagnostics">
+                    <div>
+                        <h2>陀螺仪 · rad/s</h2>
+                        <canvas id="gyro"></canvas>
+                    </div>
+                    <div>
+                        <h2>加速度 · m/s²</h2>
+                        <canvas id="accel"></canvas>
+                    </div>
+                    <dl>
+                        <dt>处理耗时</dt>
+                        <dd id="processing">—</dd>
+                        <dt>SoC 温度</dt>
+                        <dd id="board-temperature" title="板端 SoC 当前温度">
+                            —
+                        </dd>
+                        <dt>大核频率</dt>
+                        <dd
+                            id="cpu-frequency"
+                            title="CPU 大核当前频率"
+                        >
+                            —
+                        </dd>
+                    </dl>
+                </section>
+            </div>
+            <aside class="right">
+                <section>
+                    <h2>左目跟踪图 · 小图</h2>
+                    <div class="image-wrap">
+                        <img id="image0" alt="等待左目跟踪图" />
+                    </div>
+                    <small id="image-meta0">等待左目跟踪图</small
+                    ><small id="image-health" title="完整图像实收频率"></small>
+                </section>
+                <section class="timing-panel">
+                    <details id="timing-details" open>
+                        <summary>处理耗时 · ms</summary>
+                        <p id="timing-window" class="hint">等待设备统计</p>
+                        <table class="timing-table">
+                            <thead>
+                                <tr>
+                                    <th>处理项</th>
+                                    <th>耗时</th>
+                                </tr>
+                            </thead>
+                            <tbody id="timing-stages"></tbody>
+                        </table>
+                    </details>
+                </section>
+                <section class="log-panel">
+                    <h2>运行日志</h2>
+                    <pre id="logs"></pre>
+                </section>
+            </aside>
+        </main>
+        <script type="module" src="app.js"></script>
+    </body>
+</html>
