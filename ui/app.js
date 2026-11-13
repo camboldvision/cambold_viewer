@@ -60,33 +60,8 @@
         if (connection) connection.title = message || "";
         const previewEmpty = $("preview-empty");
         if (previewEmpty && message && !state.media)
-            previewEmpty.textContent = message;
+            $("preview-empty-text").textContent = message;
         if (message && typeof console !== "undefined") console.warn(message);
-    }
-
-    function applyTheme(theme) {
-        const dark = theme === "dark";
-        document.documentElement.dataset.theme = dark ? "dark" : "light";
-        const button = $("theme-toggle");
-        if (button) {
-            button.textContent = dark ? "Light mode" : "Night mode";
-            button.setAttribute("aria-pressed", dark ? "true" : "false");
-            button.title = dark ? "Use the light theme" : "Use the night theme";
-        }
-        if (typeof window.setTerminalTheme === "function")
-            window.setTerminalTheme(dark);
-    }
-
-    function loadTheme() {
-        let saved = null;
-        try {
-            saved = window.localStorage.getItem("cambold-theme");
-        } catch (_) {}
-        if (saved === "dark" || saved === "light") return saved;
-        return window.matchMedia &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches
-            ? "dark"
-            : "light";
     }
 
     function setConnection(stateName) {
@@ -234,7 +209,7 @@
             $("preview").style.height = "";
             $("preview").style.objectFit = "";
             $("preview-empty").hidden = false;
-            $("preview-empty").textContent =
+            $("preview-empty-text").textContent =
                 "Start preview to open the native UVC stream";
             button.textContent = "Start preview";
             return;
@@ -326,14 +301,6 @@
 
     function bindControls() {
         $("preview-toggle").addEventListener("click", togglePreview);
-        $("theme-toggle").addEventListener("click", () => {
-            const dark = document.documentElement.dataset.theme === "dark";
-            const next = dark ? "light" : "dark";
-            applyTheme(next);
-            try {
-                window.localStorage.setItem("cambold-theme", next);
-            } catch (_) {}
-        });
         $("antenna").addEventListener("change", () =>
             invoke("host_set_antenna", Number($("antenna").value)),
         );
@@ -360,7 +327,6 @@
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-        applyTheme(loadTheme());
         bindTabs();
         bindControls();
         const preview = $("preview");

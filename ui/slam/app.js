@@ -15,6 +15,7 @@ const nativeViewer = () =>
           ? window.viewer
           : null;
 if (embeddedSdk) {
+    document.body.classList.add("embedded");
     for (const id of ["port", "scan", "connect", "disconnect"])
         $(id).hidden = true;
 }
@@ -552,7 +553,7 @@ async function scene() {
         ]);
         const container = $("scene"),
             world = new THREE.Scene();
-        world.background = new THREE.Color("#101720");
+        world.background = new THREE.Color("#0a1018");
         const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 10000);
         camera.up.set(0, 0, 1);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -572,7 +573,7 @@ async function scene() {
         controls.addEventListener("end", () => {
             interacting = false;
         });
-        const grid = new THREE.GridHelper(20, 40, "#526075", "#263445");
+        const grid = new THREE.GridHelper(20, 40, "#425b77", "#223246");
         grid.rotation.x = Math.PI / 2;
         const worldAxes = new THREE.AxesHelper(1);
         world.add(grid, worldAxes);

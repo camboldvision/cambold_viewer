@@ -8,21 +8,14 @@
     let draining = false;
     let pendingSize = null;
 
-    function terminalTheme(dark) {
-        // The terminal is intentionally dark in both application themes.  A
-        // console keeps one stable ANSI palette, while the surrounding
-        // Camera/Terminal chrome can switch between Light and Night mode.
+    function terminalTheme() {
         return {
-            background: "#0b1016",
-            foreground: "#edf3fb",
-            cursor: "#94f2ce",
+            background: "#0b1119",
+            foreground: "#e6edf5",
+            cursor: "#69b7ff",
             selectionBackground: "#28516e",
         };
     }
-
-    window.setTerminalTheme = function (dark) {
-        if (terminal) terminal.options.theme = terminalTheme(!!dark);
-    };
 
     function decodeBase64(value) {
         const binary = atob(value);
@@ -243,9 +236,7 @@
             windowOptions: {
                 getWinSizeChars: true,
             },
-            theme: terminalTheme(
-                document.documentElement.dataset.theme === "dark",
-            ),
+            theme: terminalTheme(),
         });
 
         fitAddon = new window.FitAddon.FitAddon();

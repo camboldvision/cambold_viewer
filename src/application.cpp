@@ -9,6 +9,7 @@
 #include <utility>
 #ifdef _WIN32
 #include "resource.h"
+#include <dwmapi.h>
 #endif
 
 namespace cambold::viewer
@@ -54,6 +55,12 @@ ViewerApplication::ViewerApplication(std::string control, std::string debug)
 #ifdef _WIN32
     const auto module = GetModuleHandleW(nullptr);
     const auto window = static_cast<HWND>(window_.getWindowHandle());
+    // Older Windows SDK headers omit this attribute; unsupported systems
+    // simply retain their native title-bar appearance.
+    constexpr DWORD use_immersive_dark_mode = 20;
+    const BOOL dark_title_bar = TRUE;
+    DwmSetWindowAttribute(window, use_immersive_dark_mode, &dark_title_bar,
+                          sizeof(dark_title_bar));
     // Shared resource handles live for the process lifetime. Use both
     // sizes so the title bar and task switcher select the native icon.
     const auto large_icon =

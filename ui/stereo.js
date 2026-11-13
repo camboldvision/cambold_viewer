@@ -34,6 +34,11 @@
             $("stereo-mode").value = String(selected);
         $("stereo-fov").hidden = $("stereo-fov-label").hidden =
             projection !== 1;
+        $("stereo-fov-field").hidden = projection !== 1;
+        $("stereo-fov-field").parentElement.classList.toggle(
+            "cylindrical",
+            projection === 1,
+        );
     }
     const call = async (name, ...args) =>
         typeof window[name] === "function"
@@ -108,7 +113,9 @@
         );
         const maxFps = Number(selected?.max_fps) || 20;
         $("stereo-rate-note").textContent =
-            `Disparity: blue = near 0 px, red = 192 px; black = invalid. This mode supports up to ${maxFps} fps. Enabling lowers a higher camera rate to ${maxFps} fps.`;
+            `Disparity: blue 0 px → red 192 px · Black: invalid · Max ${maxFps} fps`;
+        $("stereo-rate-note").title =
+            `Enabling disparity lowers a higher camera rate to this mode's ${maxFps} fps limit.`;
         $("stereo-enable").disabled =
             pending || (!enabled && (!available || dirty));
         $("stereo-enable").textContent = pending
@@ -203,7 +210,7 @@
                 gl.vertexAttribPointer(a, 3, gl.FLOAT, false, 24, offset);
             }
             gl.enable(gl.DEPTH_TEST);
-            gl.clearColor(0.035, 0.05, 0.075, 1);
+            gl.clearColor(0.039, 0.063, 0.094, 1);
             this.reset();
             let drag = null;
             const finishDrag = (e) => {

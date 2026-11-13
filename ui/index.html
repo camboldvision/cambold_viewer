@@ -42,34 +42,30 @@
                     <div class="top-metric">
                         <span>IMU</span><strong id="imu-rate">0.0 Hz</strong>
                     </div>
-                    <button
-                        id="theme-toggle"
-                        class="toolbar-button"
-                        type="button"
-                        aria-pressed="false"
-                    >
-                        Night mode
-                    </button>
                     <span id="connection" class="badge offline">offline</span>
                 </div>
                 <div class="top-controls">
-                    <label for="fps">Frame rate</label>
-                    <select id="fps" aria-label="Frame rate" disabled>
-                        <option value="">Waiting for board...</option>
-                    </select>
-                    <label for="antenna">Antenna</label>
-                    <select id="antenna" disabled>
-                        <option value="" selected disabled>
-                            Waiting for board...
-                        </option>
-                        <option value="0">Ceramic antenna</option>
-                        <option value="1">Wired antenna</option>
-                    </select>
+                    <div class="inline-field">
+                        <label for="fps">Frame rate</label>
+                        <select id="fps" aria-label="Frame rate" disabled>
+                            <option value="">Waiting for board...</option>
+                        </select>
+                    </div>
+                    <div class="inline-field">
+                        <label for="antenna">Antenna</label>
+                        <select id="antenna" disabled>
+                            <option value="" selected disabled>
+                                Waiting for board...
+                            </option>
+                            <option value="0">Ceramic antenna</option>
+                            <option value="1">Wired antenna</option>
+                        </select>
+                    </div>
                     <label class="top-check"
                         ><input id="imu-output" type="checkbox" disabled /> IMU
                         output</label
                     >
-                    <button id="bag-action" type="button">
+                    <button id="bag-action" class="secondary" type="button">
                         Record rosbag...
                     </button>
                 </div>
@@ -85,6 +81,10 @@
                 aria-controls="tab-camera"
                 data-tab="tab-camera"
             >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h4l2-3h4l2 3h4v13H4z" />
+                    <circle cx="12" cy="13" r="4" />
+                </svg>
                 Camera
             </button>
             <button
@@ -95,6 +95,9 @@
                 aria-controls="tab-terminal"
                 data-tab="tab-terminal"
             >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m5 6 6 6-6 6m9 0h5" />
+                </svg>
                 Terminal
             </button>
             <button
@@ -105,6 +108,9 @@
                 aria-controls="tab-slam"
                 data-tab="tab-slam"
             >
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m3 5 6-2 6 3 6-2v15l-6 2-6-3-6 2zm6-2v15m6-12v15" />
+                </svg>
                 SLAM
             </button>
         </nav>
@@ -123,8 +129,18 @@
                                 alt="CamBold stereo MJPEG preview"
                                 hidden
                             />
-                            <div id="preview-empty" class="empty">
-                                Start preview to open the native UVC stream
+                            <div id="preview-empty" class="empty preview-empty">
+                                <svg
+                                    class="empty-icon"
+                                    viewBox="0 0 48 48"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M7 14h9l4-6h8l4 6h9v26H7z" />
+                                    <circle cx="24" cy="26" r="8" />
+                                </svg>
+                                <span id="preview-empty-text">
+                                    Start preview to open the native UVC stream
+                                </span>
                             </div>
                         </div>
                         <div class="toolbar preview-toolbar">
@@ -146,46 +162,62 @@
                                 >
                             </div>
                             <div class="stereo-controls toolbar">
-                                <label for="stereo-usage">Camera use</label
-                                ><select id="stereo-usage" disabled>
-                                    <option value="0">
-                                        Horizontal · Perspective
-                                    </option>
-                                    <option value="1">
-                                        Vertical · Cylindrical
-                                    </option>
-                                </select>
-                                <label for="stereo-mode"
-                                    >Aspect / resolution</label
-                                ><select id="stereo-mode" disabled></select>
-                                <label for="stereo-focal"
-                                    >Horizontal focal length (px)</label
-                                ><input
-                                    id="stereo-focal"
-                                    type="number"
-                                    step="any"
-                                    min="0"
-                                    disabled
-                                />
-                                <label
-                                    for="stereo-fov"
-                                    id="stereo-fov-label"
+                                <div class="control-field">
+                                    <label for="stereo-usage">Camera use</label>
+                                    <select id="stereo-usage" disabled>
+                                        <option value="0">
+                                            Horizontal · Perspective
+                                        </option>
+                                        <option value="1">
+                                            Vertical · Cylindrical
+                                        </option>
+                                    </select>
+                                </div>
+                                <div class="control-field">
+                                    <label for="stereo-mode">
+                                        Aspect / resolution
+                                    </label>
+                                    <select id="stereo-mode" disabled></select>
+                                </div>
+                                <div class="control-field">
+                                    <label for="stereo-focal">
+                                        Horizontal focal (px)
+                                    </label>
+                                    <input
+                                        id="stereo-focal"
+                                        type="number"
+                                        step="any"
+                                        min="0"
+                                        disabled
+                                    />
+                                </div>
+                                <div
+                                    id="stereo-fov-field"
+                                    class="control-field"
                                     hidden
-                                    >Vertical FOV (°)</label
-                                ><input
-                                    id="stereo-fov"
-                                    type="number"
-                                    min="30"
-                                    max="180"
-                                    step="any"
-                                    value="180"
-                                    disabled
-                                    hidden
-                                />
-                                <button id="stereo-apply" disabled>Apply</button
-                                ><button id="stereo-enable" disabled>
-                                    Enable disparity
-                                </button>
+                                >
+                                    <label for="stereo-fov" id="stereo-fov-label" hidden>
+                                        Vertical FOV (°)
+                                    </label>
+                                    <input
+                                        id="stereo-fov"
+                                        type="number"
+                                        min="30"
+                                        max="180"
+                                        step="any"
+                                        value="180"
+                                        disabled
+                                        hidden
+                                    />
+                                </div>
+                                <div class="stereo-actions">
+                                    <button id="stereo-apply" class="secondary" disabled>
+                                        Apply
+                                    </button>
+                                    <button id="stereo-enable" disabled>
+                                        Enable disparity
+                                    </button>
+                                </div>
                             </div>
                             <p
                                 id="stereo-notice"
@@ -231,10 +263,9 @@
                             <p
                                 id="stereo-rate-note"
                                 class="subtle stereo-legend"
+                                title="Black indicates invalid disparity. Enabling disparity may lower the camera frame rate to the selected mode's limit."
                             >
-                                Disparity: blue = near 0 px, red = 192 px; black
-                                = invalid. Frame rate limits are provided by the
-                                camera for each mode.
+                                Disparity: blue 0 px → red 192 px · Black: invalid
                             </p>
                         </section>
                         <section id="cloud-card" class="cloud-panel">
@@ -248,10 +279,12 @@
                                 <canvas
                                     id="cloud-canvas"
                                     aria-label="Interactive rectified camera point cloud"
+                                    title="Drag: rotate · Right / middle / Shift drag: pan · Scroll: zoom · Metres"
                                 ></canvas>
                             </div>
                             <div class="toolbar">
-                                <button id="cloud-reset">Reset view</button
+                                <button id="cloud-reset" class="secondary">
+                                    Reset view</button
                                 ><label
                                     >Depth limit (m)
                                     <input
@@ -261,10 +294,6 @@
                                         min="0.1"
                                         max="1000"
                                         step="0.5" /></label
-                                ><span class="subtle"
-                                    >Left drag: free rotation · Right / middle /
-                                    Shift drag: pan · Scroll: zoom ·
-                                    Metres</span
                                 >
                             </div>
                         </section>
@@ -307,7 +336,7 @@
                         type="button"
                         aria-label="Close"
                     >
-                        x
+                        ×
                     </button>
                 </div>
                 <label class="field-label" for="bag-name">File name</label>
