@@ -11,7 +11,7 @@ cambold_viewer/
   ui/            相机、深度、点云与终端页面
     slam/        SLAM 地图控制与三维显示
   resources/     应用图标和 Windows 资源
-  third_party/   界面所需依赖
+  third_party/   界面、预览与本地 bag 录制所需依赖
   CMakeLists.txt 构建配置与网页资源嵌入
 cambold_sdk/     独立的公共 SDK，位于同级目录
 ```
@@ -24,6 +24,11 @@ cambold_sdk/     独立的公共 SDK，位于同级目录
 `camera_state.*` 处理 SDK 事件与共享状态；`ui_bindings.cpp` 提供网页调用；
 `cb_rosbag.*` 管理本地录制。CHOC 仅保留窗口、WebView、消息循环及其传递依赖，
 包含 Windows、Linux 和 macOS 分支所需的头文件。
+
+MiniROS 的 bag 存储子集和 cpp-mjpeg-streamer 位于本目录 `third_party/`，
+构建只需要同级的 `cambold_sdk`，不再引用 `cross_compile/`。
+MiniROS 仅保留本地录制所需的存储、时间戳、序列化及图像/IMU 消息，
+不构建 ROS 节点、网络服务、播放器或压缩库。
 
 ## 构建与运行
 
@@ -89,6 +94,6 @@ CamBold contributors 所有。SDK 的许可见 [cambold_sdk/LICENSE](../cambold_
 | stb | MIT 或公有领域；`third_party/stb/stb_image.h`、`stb_image_write.h` 末尾 |
 | xterm.js | MIT；`ui/vendor/xterm/LICENSE` |
 | Three.js | MIT；`ui/slam/vendor/three/LICENSE` |
-| cpp-mjpeg-streamer | MIT；`../cross_compile/third_party/nadjieb/mjpeg_streamer.hpp` 开头 |
-| MiniROS 及录制依赖 | `../cross_compile/third_party/miniroscpp/LICENSE.txt` 和各组件随附许可 |
+| cpp-mjpeg-streamer | MIT；`third_party/nadjieb/mjpeg_streamer.hpp` 开头 |
+| MiniROS bag 存储子集 | `third_party/miniroscpp/LICENSE.txt` 和源码中的版权声明 |
 | SDK 的 USB 与 JSON 依赖 | [SDK 第三方说明](../cambold_sdk/THIRD_PARTY.md) |

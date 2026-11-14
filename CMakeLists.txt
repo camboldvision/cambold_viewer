@@ -60,32 +60,12 @@ endif()
 if(CB_BUILD_VIEWER)
     if(CB_VIEWER_ROSBAG)
         set(MINIROS_SOURCE_DIR
-            ${CMAKE_CURRENT_SOURCE_DIR}/../cross_compile/third_party/miniroscpp)
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniroscpp)
         if(NOT EXISTS "${MINIROS_SOURCE_DIR}/CMakeLists.txt")
             message(FATAL_ERROR "MiniROS source not found: ${MINIROS_SOURCE_DIR}")
         endif()
-        set(MINIROS_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-        set(MINIROS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-        set(MINIROS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(MINIROS_PORTABLE_TOOLS ON CACHE BOOL "" FORCE)
-        set(MINIROS_ROSBAG_USE_GPGME_ENCRYPTION OFF CACHE BOOL "" FORCE)
-        set(MINIROS_ROSBAG_USE_OPENSSL_ENCRYPTION OFF CACHE BOOL "" FORCE)
-        set(MINIROS_USE_NETLINK OFF CACHE BOOL "" FORCE)
-        set(MINIROS_USE_SYSTEM_BZIP2 OFF CACHE BOOL "" FORCE)
-        set(MINIROS_USE_SYSTEM_LZ4 OFF CACHE BOOL "" FORCE)
-        set(MINIROS_USE_SYSTEM_PROGRAM_OPTIONS OFF CACHE BOOL "" FORCE)
         add_subdirectory("${MINIROS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/host-miniroscpp"
                          EXCLUDE_FROM_ALL)
-        if(TARGET roscxx)
-            target_compile_options(roscxx PRIVATE
-                -Wno-format -Wno-format-extra-args
-                -Wno-error=format -Wno-error=format-extra-args)
-        endif()
-        if(TARGET bag_storage)
-            target_compile_options(bag_storage PRIVATE
-                -Wno-format -Wno-format-extra-args
-                -Wno-error=format -Wno-error=format-extra-args)
-        endif()
     endif()
 
     set(UI_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/ui)
@@ -120,7 +100,7 @@ if(CB_BUILD_VIEWER)
         ${CMAKE_CURRENT_SOURCE_DIR}/resources
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/choc-src
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
-        ${CMAKE_CURRENT_SOURCE_DIR}/../cross_compile/third_party/nadjieb
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/nadjieb
         ${CMAKE_CURRENT_BINARY_DIR}/generated)
     target_link_libraries(cambold_viewer PRIVATE CamBold::SDK nlohmann_json::nlohmann_json)
     target_compile_definitions(cambold_viewer PRIVATE CB_VIEWER_VIDEO=1)
@@ -173,4 +153,10 @@ if(TARGET cambold_viewer)
         DESTINATION share/cambold-viewer/licenses RENAME xterm-LICENSE)
     install(FILES ui/slam/vendor/three/LICENSE
         DESTINATION share/cambold-viewer/licenses RENAME three-LICENSE)
+    install(FILES third_party/nadjieb/mjpeg_streamer.hpp
+        DESTINATION share/cambold-viewer/licenses RENAME cpp-mjpeg-streamer.hpp)
+    if(CB_VIEWER_ROSBAG)
+        install(FILES third_party/miniroscpp/LICENSE.txt
+            DESTINATION share/cambold-viewer/licenses RENAME miniroscpp-LICENSE.txt)
+    endif()
 endif()

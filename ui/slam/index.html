@@ -244,6 +244,26 @@
                 </section>
             </aside>
         </main>
+        <dialog
+            id="map-confirm-dialog"
+            class="map-confirm-dialog"
+            aria-labelledby="map-confirm-title"
+            aria-describedby="map-confirm-message map-confirm-notice"
+        >
+            <form method="dialog">
+                <h2 id="map-confirm-title">重新建立地图</h2>
+                <p id="map-confirm-message"></p>
+                <p id="map-confirm-notice">
+                    新地图保存时会自动备份原地图。
+                </p>
+                <div class="map-confirm-actions">
+                    <button type="submit" value="cancel" autofocus>取消</button>
+                    <button type="submit" value="confirm" class="primary">
+                        重新建图
+                    </button>
+                </div>
+            </form>
+        </dialog>
         <script type="module" src="app.js"></script>
     </body>
 </html>

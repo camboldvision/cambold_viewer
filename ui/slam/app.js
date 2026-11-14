@@ -118,6 +118,7 @@ action("disconnect", () => api("disconnect"));
 let mapEntries = [],
     mapOptionKey = "",
     mapDefaultsSession = null,
+    mapConfirmationPending = false,
     commandPendingUntil = 0,
     lastOperation = "";
 const runningStates = new Set([
@@ -192,21 +193,46 @@ $("dense-reconstruction").addEventListener("change", () =>
     applyMapControls(lastData || {}),
 );
 action("refresh-maps", () => api("maps"));
+async function confirmMapRebuild(name) {
+    const dialog = $("map-confirm-dialog");
+    $("map-confirm-message").textContent = `是否重新建立“${name}”地图？`;
+    dialog.returnValue = "cancel";
+    mapConfirmationPending = true;
+    applyMapControls(lastData || {});
+    try {
+        return await new Promise((resolve, reject) => {
+            const onClose = () => resolve(dialog.returnValue === "confirm");
+            dialog.addEventListener("close", onClose, { once: true });
+            try {
+                dialog.showModal();
+            } catch (e) {
+                dialog.removeEventListener("close", onClose);
+                reject(e);
+            }
+        });
+    } finally {
+        mapConfirmationPending = false;
+        applyMapControls(lastData || {});
+        if (!$("start").disabled) $("start").focus();
+    }
+}
 document.querySelectorAll("[data-command]").forEach((button) =>
     button.addEventListener("click", async () => {
+        if (mapConfirmationPending) return;
         try {
             error("");
             const command = button.dataset.command;
             const args = command === "STOP" ? {} : mapSelection();
+            const session = lastData?.state?.session_id;
             if (
                 command === "START" &&
                 args.map_mode === "new" &&
                 mapEntries.some((e) => e.name === args.map_name) &&
-                !window.confirm(
-                    `重新建立“${args.map_name}”地图？新地图保存时会自动备份原地图。`,
-                )
+                !(await confirmMapRebuild(args.map_name))
             )
                 return;
+            // The connection or algorithm state may change while the dialog is open.
+            if (button.disabled || session !== lastData?.state?.session_id) return;
             commandPendingUntil = performance.now() + 1500;
             applyMapControls(lastData || {});
             await api("command", { command, args });
@@ -223,7 +249,7 @@ function applyMapControls(data) {
         Array.isArray(state.capabilities) &&
         state.capabilities.includes("map_management");
     const active = runningStates.has(state.state),
-        pending = performance.now() < commandPendingUntil;
+        pending = mapConfirmationPending || performance.now() < commandPendingUntil;
     const defaults = data.descriptors?.map_options;
     if (ready && defaults && mapDefaultsSession !== state.session_id) {
         mapDefaultsSession = state.session_id;

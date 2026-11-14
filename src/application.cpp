@@ -52,6 +52,8 @@ ViewerApplication::ViewerApplication(std::string control, std::string debug)
     : control_port_(std::move(control)), debug_port_(std::move(debug))
 {
     window_.setWindowTitle(window_title_);
+    // macOS creates a fixed-size window unless resizing is explicitly enabled.
+    window_.setResizable(true);
 #ifdef _WIN32
     const auto module = GetModuleHandleW(nullptr);
     const auto window = static_cast<HWND>(window_.getWindowHandle());
