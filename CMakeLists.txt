@@ -118,6 +118,13 @@ if(CB_BUILD_VIEWER)
                 -static -static-libgcc -static-libstdc++)
         endif()
     elseif(APPLE)
+        set_target_properties(cambold_viewer PROPERTIES
+            MACOSX_BUNDLE TRUE
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/resources/Info.plist.in"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.cambold.viewer"
+            MACOSX_BUNDLE_BUNDLE_NAME "CamBold Viewer"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
         target_link_libraries(cambold_viewer PRIVATE
             "-framework WebKit" "-framework Cocoa")
     elseif(UNIX)
@@ -145,7 +152,7 @@ endif()
 
 
 if(TARGET cambold_viewer)
-    install(TARGETS cambold_viewer RUNTIME DESTINATION bin)
+    install(TARGETS cambold_viewer RUNTIME DESTINATION bin BUNDLE DESTINATION .)
     install(FILES README.md LICENSE DESTINATION share/cambold-viewer)
     install(FILES third_party/choc-src/LICENSE.md
         DESTINATION share/cambold-viewer/licenses RENAME choc-LICENSE.md)

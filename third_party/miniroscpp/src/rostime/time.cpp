@@ -44,6 +44,9 @@
 #include <limits>
 #include <stdexcept>
 #include <mutex>
+#ifndef _WIN32
+#include <sys/time.h>
+#endif
 
 #include "miniros/rostime.h"
 #include "miniros/impl/time.h"

@@ -10,7 +10,7 @@ cambold_viewer/
   src/           程序运行、设备状态、界面绑定与 bag 录制
   ui/            相机、深度、点云与终端页面
     slam/        SLAM 地图控制与三维显示
-  resources/     应用图标和 Windows 资源
+  resources/     应用图标、Windows 资源和 macOS 应用包信息
   third_party/   界面、预览与本地 bag 录制所需依赖
   CMakeLists.txt 构建配置与网页资源嵌入
 cambold_sdk/     独立的公共 SDK，位于同级目录
@@ -38,7 +38,8 @@ cmake --build build/viewer --target cambold_viewer
 cmake --install build/viewer --prefix ./cambold_viewer
 ```
 
-Windows 使用 MinGW-w64；Linux 需要 GTK3 和 WebKit2GTK；macOS 使用系统 WebKit。
+Windows 使用 MinGW-w64；Linux 需要 GTK3 和 WebKit2GTK；macOS 使用系统 WebKit 显示界面，
+SDK 通过 libuvc/libusb 读取 UVC 图像。
 `CB_VIEWER_ROSBAG=OFF` 可关闭本地 bag 录制，默认开启。
 
 Windows 构建并安装后运行：
@@ -46,6 +47,17 @@ Windows 构建并安装后运行：
 ```powershell
 .\cambold_viewer\bin\cambold_viewer.exe
 ```
+
+macOS 的 UVC 原始视频采集需要管理员权限。构建后使用 sudo 启动：
+
+```sh
+sudo build/viewer/cambold_viewer.app/Contents/MacOS/cambold_viewer
+```
+
+SDK 直接接收 UVC 原始 MJPEG，保留板端时间戳、帧序号和曝光参数。原始 USB 捕获
+期间，MTP 和用户 ACM 等系统接口可能暂时不可用；退出释放设备
+时可能重新枚举。权限说明见 [SDK README](../cambold_sdk/README.md#macos-usb-权限)。
+分发时请保留完整 `.app` 包。
 
 程序自动发现相机的 SDK bulk 接口。调试和控制分别使用 `gser.0` 与 `gser.1`，
 用户 ACM 保留给用户应用。需要手动选择逻辑接口时，可传入
