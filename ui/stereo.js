@@ -113,9 +113,9 @@
         );
         const maxFps = Number(selected?.max_fps) || 20;
         $("stereo-rate-note").textContent =
-            `Disparity: blue 0 px → red 192 px · Black: invalid · Max ${maxFps} fps`;
+            `Normalized disparity: blue min → red max · Black: invalid · Max ${maxFps} fps`;
         $("stereo-rate-note").title =
-            `Enabling disparity lowers a higher camera rate to this mode's ${maxFps} fps limit.`;
+            `Colors are normalized to each frame's valid disparity range. Enabling disparity lowers a higher camera rate to this mode's ${maxFps} fps limit.`;
         $("stereo-enable").disabled =
             pending || (!enabled && (!available || dirty));
         $("stereo-enable").textContent = pending
@@ -199,6 +199,7 @@
             this.program = program;
             this.buffer = gl.createBuffer();
             this.count = 0;
+            this.points = new Float32Array();
             this.vp = gl.getUniformLocation(program, "vp");
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
             for (const [name, offset] of [
@@ -242,6 +243,10 @@
                     x: e.clientX,
                     y: e.clientY,
                     pan: e.button !== 0 || e.shiftKey,
+                    pivot:
+                        e.button === 0 && !e.shiftKey
+                            ? this.pickPoint(e.clientX, e.clientY)
+                            : null,
                 };
                 canvas.setPointerCapture(e.pointerId);
                 canvas.style.cursor = drag.pan ? "move" : "grabbing";
@@ -265,7 +270,7 @@
                         Math.max(1, canvas.clientHeight);
                     for (let i = 0; i < 3; i++)
                         this.target[i] += (-dx * right[i] + dy * up[i]) * s;
-                } else this.rotate(dx, dy);
+                } else this.rotate(dx, dy, drag.pivot);
                 this.render();
             });
             for (const event of [
@@ -308,15 +313,63 @@
             this.render();
         }
         setPoints(points) {
+            this.points = points;
             this.count = points.length / 6;
             const gl = this.gl;
             gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
             gl.bufferData(gl.ARRAY_BUFFER, points, gl.DYNAMIC_DRAW);
             this.render();
         }
-        rotate(dx, dy) {
+        pickPoint(clientX, clientY) {
+            const rect = this.canvas.getBoundingClientRect(),
+                m = this.viewProjection;
+            if (!m || !rect.width || !rect.height) return null;
+            const mouseX = clientX - rect.left,
+                mouseY = clientY - rect.top,
+                points = this.points,
+                hits = [];
+            let closest = 8 * 8;
+            // Pick in CSS pixels so the hit radius is independent of zoom
+            // and display DPI. This scan runs only when a rotation starts.
+            for (let i = 0; i < points.length; i += 6) {
+                const x = points[i],
+                    y = points[i + 1],
+                    z = points[i + 2],
+                    w = m[3] * x + m[7] * y + m[11] * z + m[15];
+                if (!(w > 0)) continue;
+                const px =
+                        (m[0] * x + m[4] * y + m[8] * z + m[12]) / w,
+                    py = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w,
+                    pz = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w;
+                if (
+                    !(Math.abs(px) <= 1 && Math.abs(py) <= 1 && Math.abs(pz) <= 1)
+                )
+                    continue;
+                const dx = ((px + 1) * rect.width) / 2 - mouseX,
+                    dy = ((1 - py) * rect.height) / 2 - mouseY,
+                    distance = dx * dx + dy * dy;
+                if (distance > 8 * 8) continue;
+                closest = Math.min(closest, distance);
+                hits.push({ index: i, distance, depth: w });
+            }
+            let selected = null;
+            for (const hit of hits) {
+                // Subpixel overlaps select the front surface, rather than
+                // a point behind it whose projected center is slightly nearer.
+                if (
+                    hit.distance <= closest + 0.25 &&
+                    (!selected || hit.depth < selected.depth)
+                )
+                    selected = hit;
+            }
+            return selected
+                ? Array.from(points.subarray(selected.index, selected.index + 3))
+                : null;
+        }
+        rotate(dx, dy, pivot = null) {
             const pixels = Math.hypot(dx, dy);
             if (!pixels) return;
+            const previous = pivot ? this.viewBasis() : null;
             // Compose a rotation around the current screen axes. No fixed
             // world-up direction or Euler pitch clamp is imposed at poles.
             const half = (pixels * 0.006) / 2,
@@ -333,6 +386,23 @@
             ];
             const norm = Math.hypot(...q);
             this.orientation = q.map((v) => v / norm);
+            if (pivot) {
+                // Rotate the eye and look-at target together about the picked
+                // point. Its screen position stays fixed, with no recentering
+                // jump when the mouse is pressed or a new depth frame arrives.
+                const offset = this.target.map((v, i) => v - pivot[i]),
+                    next = this.viewBasis(),
+                    target = pivot.slice();
+                for (const axis of ["right", "up", "back"]) {
+                    const component = offset.reduce(
+                        (sum, v, i) => sum + v * previous[axis][i],
+                        0,
+                    );
+                    for (let i = 0; i < 3; i++)
+                        target[i] += component * next[axis][i];
+                }
+                this.target = target;
+            }
         }
         viewBasis() {
             const [x, y, z, w] = this.orientation;
@@ -418,6 +488,7 @@
                     for (let k = 0; k < 4; k++)
                         m[col * 4 + row] +=
                             projection[k * 4 + row] * view[col * 4 + k];
+            this.viewProjection = m;
             gl.useProgram(this.program);
             gl.uniformMatrix4fv(this.vp, false, m);
             gl.drawArrays(gl.POINTS, 0, this.count);
@@ -510,7 +581,18 @@
             colorRgba = colorImage.data;
         const points = new Float32Array(pixels * 6),
             limit = Number($("cloud-depth").value) || 10;
-        let count = 0;
+        let count = 0,
+            minDisparity = Infinity,
+            maxDisparity = 0;
+        // Normalize valid disparities independently for every frame: the
+        // largest disparity is red and the smallest disparity is blue.
+        for (let i = 0; i < pixels; i++) {
+            const d = fp16Pixels[v.getUint16(header + i * 2, true)];
+            if (!Number.isFinite(d) || d <= 0) continue;
+            minDisparity = Math.min(minDisparity, d);
+            maxDisparity = Math.max(maxDisparity, d);
+        }
+        const disparityRange = maxDisparity - minDisparity;
         for (let i = 0; i < pixels; i++) {
             const row = Math.floor(i / w),
                 column = i % w;
@@ -532,13 +614,19 @@
             colorRgba[offset + 2] = b * 255;
             colorRgba[offset + 3] = 255;
             if (!Number.isFinite(d) || d <= 0) continue;
-            const t = Math.max(0, Math.min(1, d / 192));
-            rgba[offset] =
-                255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 3)));
+            const t =
+                disparityRange > 0
+                    ? Math.max(
+                          0,
+                          Math.min(1, (d - minDisparity) / disparityRange),
+                      )
+                    : 1;
+            // Keep the blue/cyan/green/yellow/red palette with full-intensity
+            // endpoints for the farthest and nearest valid samples.
+            rgba[offset] = 255 * Math.max(0, Math.min(1, 4 * t - 2));
             rgba[offset + 1] =
-                255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 2)));
-            rgba[offset + 2] =
-                255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 1)));
+                255 * Math.max(0, Math.min(1, 2 - Math.abs(4 * t - 2)));
+            rgba[offset + 2] = 255 * Math.max(0, Math.min(1, 2 - 4 * t));
             const radius = (focal * baseline) / d,
                 theta = (row - cy) / fy;
             if (!Number.isFinite(radius) || radius <= 0) continue;

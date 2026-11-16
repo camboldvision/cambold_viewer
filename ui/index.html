@@ -270,9 +270,9 @@
                             <p
                                 id="stereo-rate-note"
                                 class="subtle stereo-legend"
-                                title="Black indicates invalid disparity. Enabling disparity may lower the camera frame rate to the selected mode's limit."
+                                title="Colors are normalized to each frame's valid disparity range: blue is the minimum and red is the maximum. Black indicates invalid disparity. Enabling disparity may lower the camera frame rate to the selected mode's limit."
                             >
-                                Disparity: blue 0 px → red 192 px · Black: invalid
+                                Normalized disparity: blue min → red max · Black: invalid
                             </p>
                         </section>
                         <section id="cloud-card" class="cloud-panel">
@@ -286,7 +286,7 @@
                                 <canvas
                                     id="cloud-canvas"
                                     aria-label="Interactive rectified camera point cloud"
-                                    title="Drag: rotate · Right / middle / Shift drag: pan · Scroll: zoom · Metres"
+                                    title="Drag a point: rotate around it · Right / middle / Shift drag: pan · Scroll: zoom · Metres"
                                 ></canvas>
                             </div>
                             <div class="toolbar">
