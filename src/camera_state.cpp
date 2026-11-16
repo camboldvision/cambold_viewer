@@ -45,6 +45,14 @@ void host_event(const cb_event *event, void *user)
     update_rates_locked(state, now);
     switch (event->type)
     {
+    case CB_EVENT_CALIBRATION_STATUS:
+        if (event->request_id && event->text)
+        {
+            if (state->calibration_replies.size() >= 32)
+                state->calibration_replies.pop_front();
+            state->calibration_replies.emplace_back(event->request_id, event->text);
+        }
+        break;
     case CB_EVENT_CONNECTED:
         state->connection = ConnectionState::Online;
         state->last_result = "control protocol online";

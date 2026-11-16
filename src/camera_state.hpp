@@ -12,6 +12,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <deque>
+#include <utility>
 
 namespace cambold::viewer
 {
@@ -50,6 +52,7 @@ struct UiState
     std::string debug_port;
     std::string device_name;
     std::string metrics = "{}";
+    std::deque<std::pair<uint64_t, std::string>> calibration_replies;
     std::string last_result = "waiting for camera";
     std::string last_error;
     bool native_uvc = false;

@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>相机标定</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div><h1>相机标定</h1><p>标定任务在相机端运行。切换页面或暂时断开上位机连接后，任务继续执行。</p></div><span id="connection" class="badge">连接中</span><button id="show-report" class="secondary" disabled>查看标定结果</button><button id="enter">进入标定模式</button><button id="leave" class="secondary" disabled>退出标定模式</button></header>
+<div id="notice" role="status">原始 UVC 预览可继续使用。标定模式暂停普通 IMU、深度图和 SLAM 的 bulk 传输。</div>
+<main>
+<aside>
+<section class="card"><h2>IMU 静态噪声标定 <span>可选</span></h2><p>将相机固定在无振动的位置，连续静置至少 120 分钟。检测到运动或数据间断时，连续静态计时重新开始。</p><div class="countdown" id="countdown">120:00</div><div class="meter"><div id="static-progress"></div></div><div class="row"><span>连续静态时长</span><strong id="quiet">00:00</strong></div><div class="row"><span>采样率 / 样本数</span><strong id="imu">—</strong></div><div class="row"><span>重新计时次数</span><strong id="resets">0</strong></div><button id="start-imu" disabled>开始静态采集</button><button id="stop-imu" class="danger" disabled>停止静态采集</button><button id="fit-imu" class="secondary" disabled>拟合并保存噪声参数</button><p id="noise" class="hint">正在读取已有噪声参数…</p></section>
+<section class="card"><h2>双目与相机–IMU 联合标定</h2><p>使用 Tag36h11 AprilGrid，黑边宽度为 2。固定标定板，移动相机；覆盖两幅图像的中心、四边和四角，并围绕多个轴缓慢转动。</p>
+<div class="fields"><label>标签行数<input id="rows" type="number" min="1" max="587" value="6"></label><label>标签列数<input id="cols" type="number" min="1" max="587" value="6"></label><label>标签黑框边长（米）<input id="tag-size" type="number" min="0.001" max="2" step="0.0001" value="0.0352"></label><label>标签间距 / 黑框边长<input id="spacing" type="number" min="0" max="2" step="0.01" value="0.3"></label></div>
+<p class="hint">请按实际标定板填写参数。标签尺寸不含白色间距。</p><div class="row"><span>有效观测组数 / 已检测帧</span><strong id="frames">0 / 0</strong></div><div class="row"><span>左目 / 右目覆盖率</span><strong id="coverage">0% / 0%</strong></div><button id="start-camera" disabled>开始联合采集</button><button id="solve" class="secondary" disabled>结束采集并开始标定</button></section>
+</aside>
+<article>
+<section class="card preview"><div class="title"><h2>角点覆盖预览</h2><span class="hint">左目 · 右目　/　30 fps</span></div><div class="image"><img id="preview" alt="左右相机标定预览" hidden><div id="empty">进入标定模式后显示画面</div></div><p class="hint">绿色点表示历史检测位置。覆盖率按图像网格计算，边缘未覆盖区域需继续采集。</p></section>
+<section class="card progress"><div class="title"><h2 id="phase">等待任务</h2><button id="cancel" class="danger" disabled>取消当前任务</button></div><p id="step">两个阶段分别更新同一个 camera_imu_calibration.yaml；联合标定会使用文件中已有的 IMU 噪声结果。</p><div class="stages" id="stages"><span>数据检查</span><span>左目</span><span>右目</span><span>双目</span><span>IMU 初始化</span><span>联合优化</span><span>校验与保存</span></div><div class="meter"><div id="solve-progress"></div></div><div class="stats"><div><small>本阶段耗时</small><strong id="phase-time">—</strong></div><div><small>当前计算进度</small><strong id="iteration">—</strong></div><div><small>本阶段剩余时间</small><strong id="eta">待估算</strong></div><div><small>状态连接</small><strong id="heartbeat">—</strong></div></div><canvas id="cost" height="100" aria-label="优化代价变化"></canvas><p class="hint" id="detail">求解过程中会显示实际阶段、处理数量和迭代信息。</p><p class="hint">结果通过检查后保存至 /data/eeprom/camera_imu_calibration.yaml，并执行回读校验。已有文件的上一版本备份在 /data/share/camera_imu_calibration.previous.yaml。</p></section>
+</article>
+</main>
+<dialog id="confirm"><form method="dialog"><h2 id="confirm-title">确认操作</h2><p id="confirm-message"></p><div class="actions"><button value="cancel" class="secondary">取消</button><button value="ok">确认</button></div></form></dialog>
+<dialog id="report-dialog"><div class="report-toolbar"><h2>标定结果与报告</h2><select id="report-kind"><option value="current">当前标定参数</option><option value="joint">双目与相机–IMU 联合报告</option><option value="imu">IMU 静态噪声报告</option></select><button id="report-refresh" class="secondary">重新读取</button><button id="report-close" class="secondary">关闭</button></div><p id="report-state" role="status"></p><iframe id="report-frame" title="详细标定报告" src="about:blank" hidden></iframe></dialog>
+<script src="app.js"></script>
+</body></html>

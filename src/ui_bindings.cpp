@@ -3,6 +3,7 @@
 #include "choc/text/choc_JSON.h"
 #include <nlohmann/json.hpp>
 #include <cwchar>
+#include <algorithm>
 #include <stdexcept>
 #ifdef _WIN32
 #include <commdlg.h>
@@ -37,11 +38,101 @@ std::string base64_encode(const uint8_t *data, size_t size)
 
 void ViewerApplication::bind(choc::ui::WebView &view)
 {
+    view.bind("host_calibration", [this](const choc::value::ValueView &values) {
+        try {
+            if (!state_.host || !cb_connected(state_.host))
+                throw std::runtime_error("Camera is offline");
+            const auto request = nlohmann::json::parse(choc::json::toString(values[0]));
+            const std::string action = request.at("action");
+            nlohmann::json result = {{"ok", true}};
+            if (action == "preflight") {
+                {
+                    std::lock_guard<std::mutex> lock(state_.mutex);
+                    result["recording"] = state_.local_bag_active;
+                }
+                char *json = nullptr;
+                if (!cb_slam_get_json(state_.host, &json)) {
+                    auto slam = nlohmann::json::parse(json, nullptr, false);
+                    cb_slam_free_json(json);
+                    const auto state =
+                        slam.value("state", nlohmann::json::object()).value("state", std::string());
+                    result["slam_running"] = state == "RUNNING" || state == "INITIALIZING" ||
+                                             state == "STARTING" || state == "CONFIGURING_CAMERA" ||
+                                             state == "STOPPING";
+                }
+            } else if (action == "report") {
+                const std::string kind = request.at("kind");
+                static const std::vector<std::string> names = {"current", "joint", "imu"};
+                const auto found = std::find(names.begin(), names.end(), kind);
+                if (found == names.end()) throw std::runtime_error("Unknown calibration report");
+                const auto id = cb_next_request_id(state_.host);
+                const int rc = cb_request_calibration_report(state_.host,
+                    static_cast<cb_calibration_report_kind>(found - names.begin()),
+                    request.value("revision", uint32_t(0)), request.value("offset", uint32_t(0)), id);
+                if (rc) throw std::runtime_error("Report request failed: " + std::to_string(rc));
+                result["request_id"] = id;
+            } else if (action == "poll") {
+                char json[32768];
+                int rc = cb_get_calibration_status(state_.host, json, sizeof(json));
+                if (!rc)
+                    result["status"] = nlohmann::json::parse(json);
+                {
+                    std::lock_guard<std::mutex> lock(state_.mutex);
+                    result["replies"] = nlohmann::json::array();
+                    for (const auto &reply : state_.calibration_replies)
+                        result["replies"].push_back(
+                            {{"request_id", reply.first},
+                             {"data", nlohmann::json::parse(reply.second, nullptr, false)}});
+                    state_.calibration_replies.clear();
+                }
+                if (request.value("preview", true)) {
+                    cb_calibration_preview info{};
+                    std::vector<uint8_t> jpeg(256 * 1024);
+                    size_t size = jpeg.size();
+                    rc =
+                        cb_get_calibration_preview(state_.host, request.value("after", uint64_t(0)),
+                                                   &info, jpeg.data(), &size);
+                    if (!rc) {
+                        result["jpeg"] = base64_encode(jpeg.data(), size);
+                        result["sequence"] = info.sequence;
+                        result["width"] = info.width;
+                        result["height"] = info.height;
+                    }
+                }
+            } else {
+                static const std::vector<std::string> names = {
+                    "status", "enter", "start_imu", "start_camera", "solve", "cancel", "leave"};
+                auto found = std::find(names.begin(), names.end(), action);
+                if (found == names.end())
+                    throw std::runtime_error("Unknown calibration action");
+                {
+                    std::lock_guard<std::mutex> lock(state_.mutex);
+                    if (action == "enter" && state_.local_bag_active)
+                        throw std::runtime_error("Stop recording before calibration");
+                }
+                cb_calibration_options options{};
+                if (action == "start_camera") {
+                    options.tag_rows = request.at("rows");
+                    options.tag_cols = request.at("cols");
+                    options.tag_size_metres = request.at("tag_size_m");
+                    options.tag_spacing = request.at("spacing");
+                }
+                const auto id = cb_next_request_id(state_.host);
+                result["request_id"] = id;
+                int rc = cb_calibration_command(
+                    state_.host, static_cast<cb_calibration_action>(found - names.begin()),
+                    &options, id);
+                if (rc)
+                    throw std::runtime_error("Calibration request failed: " + std::to_string(rc));
+            }
+            return choc::value::Value(result.dump());
+        } catch (const std::exception &e) {
+            return choc::value::Value(nlohmann::json({{"ok", false}, {"error", e.what()}}).dump());
+        }
+    });
     view.bind("viewer",
-              [this](const choc::value::ValueView &values)
-              {
-                  try
-                  {
+              [this](const choc::value::ValueView &values) {
+                  try {
                       if (!state_.host)
                           throw std::runtime_error("SDK connection unavailable");
                       const auto request = nlohmann::json::parse(choc::json::toString(values[0]));
@@ -112,9 +203,7 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                       if (status)
                           throw std::runtime_error("SDK request failed: " + std::to_string(status));
                       return choc::value::Value(result.dump());
-                  }
-                  catch (const std::exception &e)
-                  {
+                  } catch (const std::exception &e) {
                       return choc::value::Value(
                           nlohmann::json({{"ok", false}, {"error", e.what()}}).dump());
                   }
