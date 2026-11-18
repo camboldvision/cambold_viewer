@@ -175,6 +175,17 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                           const auto command = request.at("command").get<std::string>();
                           if (command == "STOP")
                               status = cb_slam_stop(state_.host);
+                          else if (command == "SET_PROCESSING")
+                          {
+                              const auto args = request.at("args");
+                              const bool backend = args.at("backend_enabled").get<bool>();
+                              const bool dense = backend && args.at("dense_reconstruction").get<bool>();
+#if CB_VIEWER_ROSBAG
+                              if (dense && local_bag_.active() && local_bag_.record_imu())
+                                  throw std::runtime_error("请先停止包含 IMU 的录制，再开启稠密重建。");
+#endif
+                              status = cb_slam_set_processing(state_.host, backend, dense);
+                          }
                           else if (command == "START")
                           {
                               const auto args = request.value("args", nlohmann::json::object());
@@ -182,7 +193,8 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                                          mode = args.value("map_mode", std::string("new"));
                               if (mode != "new" && mode != "resume" && mode != "localization")
                                   throw std::runtime_error("Invalid map mode");
-                              const bool dense = args.value("dense_reconstruction", true);
+                              const bool backend = args.value("backend_enabled", true);
+                              const bool dense = backend && args.value("dense_reconstruction", true);
 #if CB_VIEWER_ROSBAG
                               if (dense && local_bag_.active() && local_bag_.record_imu())
                                   throw std::runtime_error(
@@ -193,7 +205,8 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                                                       : mode == "resume" ? 1u
                                                                          : 2u,
                                                       dense ? 1 : 0};
-                              status = cb_slam_start(state_.host, &options);
+                              status = cb_slam_set_processing(state_.host, backend, dense);
+                              if (!status) status = cb_slam_start(state_.host, &options);
                           }
                           else
                               throw std::runtime_error("Unknown SLAM command");

@@ -113,6 +113,10 @@ if(CB_BUILD_VIEWER)
     if(WIN32)
         target_link_libraries(cambold_viewer PRIVATE
             ole32 shlwapi user32 comdlg32 version dwmapi advapi32 ws2_32)
+        if(MINGW)
+            target_link_options(cambold_viewer PRIVATE
+                "$<$<OR:$<CONFIG:Release>,$<CONFIG:MinSizeRel>>:-s>")
+        endif()
         if(MINGW AND CB_VIEWER_STATIC_MINGW)
             target_link_options(cambold_viewer PRIVATE
                 -static -static-libgcc -static-libstdc++)

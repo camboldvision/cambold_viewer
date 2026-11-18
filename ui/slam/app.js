@@ -120,7 +120,8 @@ let mapEntries = [],
     mapDefaultsSession = null,
     mapConfirmationPending = false,
     commandPendingUntil = 0,
-    lastOperation = "";
+    lastOperation = "",
+    processingRequest = null;
 const runningStates = new Set([
     "CONFIGURING_CAMERA",
     "STARTING",
@@ -144,6 +145,7 @@ function mapSelection() {
     return {
         map_name: name,
         map_mode: mode,
+        backend_enabled: $("backend-enabled").checked,
         dense_reconstruction: $("dense-reconstruction").checked,
     };
 }
@@ -189,9 +191,25 @@ $("map-select").addEventListener("change", () => {
     applyMapControls(lastData || {});
 });
 $("map-name").addEventListener("input", () => applyMapControls(lastData || {}));
-$("dense-reconstruction").addEventListener("change", () =>
-    applyMapControls(lastData || {}),
-);
+async function changeProcessing() {
+    if (!$("backend-enabled").checked) $("dense-reconstruction").checked = false;
+    const args = {
+        backend_enabled: $("backend-enabled").checked,
+        dense_reconstruction: $("dense-reconstruction").checked,
+    };
+    processingRequest = { ...args, session: lastData?.state?.session_id };
+    applyMapControls(lastData || {});
+    try {
+        error("");
+        await api("command", { command: "SET_PROCESSING", args });
+    } catch (e) {
+        processingRequest = null;
+        error(e.message);
+        applyMapControls(lastData || {});
+    }
+}
+$("backend-enabled").addEventListener("change", changeProcessing);
+$("dense-reconstruction").addEventListener("change", changeProcessing);
 action("refresh-maps", () => api("maps"));
 async function confirmMapRebuild(name) {
     const dialog = $("map-confirm-dialog");
@@ -250,6 +268,13 @@ function applyMapControls(data) {
         state.capabilities.includes("map_management");
     const active = runningStates.has(state.state),
         pending = mapConfirmationPending || performance.now() < commandPendingUntil;
+    const runtimeProcessing = state.capabilities?.includes("runtime_processing");
+    if (processingRequest &&
+        (!ready || processingRequest.session !== state.session_id ||
+         (!state.processing_options_pending &&
+          state.backend_enabled === processingRequest.backend_enabled &&
+          state.dense_reconstruction === processingRequest.dense_reconstruction)))
+        processingRequest = null;
     const defaults = data.descriptors?.map_options;
     if (ready && defaults && mapDefaultsSession !== state.session_id) {
         mapDefaultsSession = state.session_id;
@@ -263,13 +288,23 @@ function applyMapControls(data) {
         "map-mode",
         "map-select",
         "map-name",
-        "dense-reconstruction",
     ])
         $(id).disabled = !ready || !supported || active || pending;
-    if (active)
+    if (!processingRequest) {
+        $("backend-enabled").checked = state.backend_enabled !== false;
         $("dense-reconstruction").checked =
-            state.dense_reconstruction !== false;
-    $("reconstruction-hint").textContent = $("dense-reconstruction").checked
+            $("backend-enabled").checked && state.dense_reconstruction !== false;
+    }
+    const changing = !!processingRequest || state.processing_options_pending;
+    const canChange = ready && runtimeProcessing && !pending && !changing &&
+        (!active || state.state === "RUNNING" || state.state === "INITIALIZING");
+    $("backend-enabled").disabled = !canChange;
+    $("dense-reconstruction").disabled = !canChange || !$("backend-enabled").checked;
+    $("reconstruction-hint").textContent = changing
+        ? "正在切换处理模式…"
+        : !$("backend-enabled").checked
+          ? "仅运行前端位姿估计。后端和地图更新已暂停，重新开启后继续处理。"
+          : $("dense-reconstruction").checked
         ? "生成彩色稠密地图。运行期间关闭 SDK 的 IMU 上传，相机继续使用 IMU 进行定位。"
         : "生成稀疏地图，支持建图与重定位。可单独开启深度预览。";
     $("refresh-maps").disabled = !ready || !supported;
@@ -283,11 +318,12 @@ function applyMapControls(data) {
         !supported ||
         active ||
         pending ||
+        changing ||
         !valid ||
         state.calibration_ready === false ||
         state.model_ready === false;
     $("stop").disabled =
-        !ready || !active || pending || state.state === "STOPPING";
+        !ready || !active || pending || changing || state.state === "STOPPING";
     $("stop").textContent =
         state.map_mode === "localization" ? "停止定位" : "停止并保存";
     $("active-map").textContent = state.map_name || "—";
@@ -298,6 +334,7 @@ function applyMapControls(data) {
             SEARCHING: "等待重定位",
             LOCALIZED: "已定位",
             ODOMETRY: "位姿推算",
+            DISABLED: "后端已暂停",
         }[state.map_localization] || "—";
     $("map-save-state").textContent = state.map_read_only
         ? "原地图只读"
@@ -326,6 +363,7 @@ function applyMapControls(data) {
         operation.operation_id !== lastOperation
     ) {
         lastOperation = operation.operation_id;
+        processingRequest = null;
         commandPendingUntil = 0;
         error(mapError(operation.message || "板端操作失败"));
     }
@@ -348,6 +386,11 @@ function subscribe() {
         images: $("images").checked,
         dense: $("dense").checked,
     });
+}
+function mapPointsVisible(state = {}) {
+    const geometry = state.map_geometry ||
+        (state.dense_reconstruction === false ? "sparse" : "dense");
+    return $(geometry === "sparse" ? "show-sparse" : "show-dense").checked;
 }
 $("images").addEventListener("change", () => {
     if (!$("images").checked) clearPreview();
@@ -372,7 +415,7 @@ function frequency(mhz) {
 }
 const timingRows = [
     ["processing_ms", "位姿处理"],
-    ["mapping_ms", "地图处理（平均）"],
+    ["mapping_ms", "地图处理（最近10帧平均）"],
 ];
 const timingCells = new Map();
 for (const [key, label] of timingRows) {
@@ -485,7 +528,10 @@ function apply(data) {
             : `${fixed(state.board_temperature_c, 1)} °C`;
     $("cpu-frequency").textContent = frequency(state.cpu_big_current_mhz);
     applyTiming(state);
-    $("map-nodes").textContent = state.map_nodes ?? 0;
+    // Until 3D is ready, use the SDK's accepted map rather than an independently
+    // timed device status. The renderer below owns the displayed count once ready.
+    if (!rendering)
+        $("map-nodes").textContent = state.received_keyframes ?? 0;
     $("loops-label").textContent =
         state.map_mode === "localization" ? "地图匹配" : "回环";
     $("loops").textContent =
@@ -524,10 +570,13 @@ function apply(data) {
     const boundary = `${state.run_id}:${state.epoch}`;
     if (generation !== data.generation) {
         generation = data.generation;
+        pendingMapDeltas = [];
         rendering?.clear();
     }
     if (lastBoundary !== boundary || lastBoundary === null) {
         lastBoundary = boundary;
+        pendingMapDeltas = [];
+        rendering?.clear();
         gyroSamples.length = 0;
         accelSamples.length = 0;
         clearPreview("等待本次运行的左目图像");
@@ -752,8 +801,10 @@ async function scene() {
                 if (havePose) renderNeeded = true;
                 havePose = false;
             }
+            const keyframeCount = mapLayer.keyframeCount;
+            $("map-nodes").textContent = keyframeCount;
             $("point-count").textContent =
-                `${mapLayer.count} 点 · ${mapLayer.keyframeCount} 关键帧视锥`;
+                `${mapLayer.count} 点 · ${keyframeCount} 关键帧视锥`;
             $("scene-message").textContent =
                 data.state.map_sync_error ||
                 (data.state.calibration_ready === false
@@ -781,18 +832,19 @@ async function scene() {
                 renderNeeded = true;
             }
             const bodyVisible = havePose && $("show-body").checked,
-                gridVisible = $("show-grid").checked;
+                gridVisible = $("show-grid").checked,
+                pointsVisible = mapPointsVisible(lastData?.state);
             if (
                 body.visible !== bodyVisible ||
                 grid.visible !== gridVisible ||
                 mapLayer.keyframes.visible !== $("show-keyframes").checked ||
-                mapLayer.points.visible !== $("show-dense").checked
+                mapLayer.points.visible !== pointsVisible
             )
                 renderNeeded = true;
             body.visible = havePose && $("show-body").checked;
             grid.visible = worldAxes.visible = $("show-grid").checked;
             mapLayer.keyframes.visible = $("show-keyframes").checked;
-            mapLayer.points.visible = $("show-dense").checked;
+            mapLayer.points.visible = pointsVisible;
             if (havePose && !$("pause-view").checked) {
                 bodyStep.copy(body.position);
                 body.position.copy(targetPosition);

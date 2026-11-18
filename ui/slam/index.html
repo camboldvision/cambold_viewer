@@ -57,13 +57,23 @@
                     <p id="camera-configuration" class="hint">
                         启动时自动配置相机分辨率与帧率；加载地图时恢复地图的相机参数。
                     </p>
-                    <label
-                        ><input
-                            id="dense-reconstruction"
+                    <label class="processing-switch"
+                        ><span>后端处理</span><input
+                            id="backend-enabled"
                             type="checkbox"
+                            role="switch"
                             checked
                             disabled
-                        />执行稠密重建</label
+                        /><span class="switch-track" aria-hidden="true"></span></label
+                    >
+                    <label class="processing-switch"
+                        ><span>稠密重建</span><input
+                            id="dense-reconstruction"
+                            type="checkbox"
+                            role="switch"
+                            checked
+                            disabled
+                        /><span class="switch-track" aria-hidden="true"></span></label
                     >
                     <p id="reconstruction-hint" class="hint">
                         生成彩色稠密地图。运行期间关闭 SDK 的 IMU
@@ -134,7 +144,13 @@
                             id="show-dense"
                             type="checkbox"
                             checked
-                        />地图点云</label
+                        />稠密点云</label
+                    ><label
+                        ><input
+                            id="show-sparse"
+                            type="checkbox"
+                            checked
+                        />稀疏点云</label
                     ><label><input id="follow" type="checkbox" />跟随相机</label
                     ><label
                         ><input
