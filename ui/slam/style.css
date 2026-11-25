@@ -302,12 +302,43 @@ dd {
     font-variant-numeric: tabular-nums;
 }
 .diagnostics {
+    position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr 150px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 12px;
-    height: 145px;
+    height: 160px;
     flex-shrink: 0;
-    padding: 10px 14px;
+    padding: 28px 14px 8px;
+}
+.imu-preview-status {
+    position: absolute;
+    top: 5px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 10px;
+}
+#enable-imu { padding: 2px 7px; font-size: 10px; }
+#map-scale {
+    position: absolute;
+    left: 20px;
+    bottom: 16px;
+    z-index: 1;
+    pointer-events: none;
+    color: #e1ecf8;
+    font: 11px/1.7 ui-monospace, Consolas, monospace;
+    text-align: center;
+    text-shadow: 0 1px 3px #000;
+}
+#map-scale-line {
+    display: block;
+    height: 7px;
+    border: solid #e1ecf8;
+    border-width: 0 2px 2px;
+    filter: drop-shadow(0 1px 1px #000);
 }
 .diagnostics h2 {
     margin-bottom: 4px;
@@ -316,11 +347,6 @@ dd {
 .diagnostics canvas {
     width: 100%;
     height: 96px;
-}
-.diagnostics dl {
-    grid-template-columns: 68px 1fr;
-    font-size: 10px;
-    margin: 16px 0;
 }
 .image-wrap {
     position: relative;
@@ -396,10 +422,7 @@ pre {
     }
     .diagnostics {
         grid-template-columns: 1fr 1fr;
-        height: 135px;
-    }
-    .diagnostics dl {
-        display: none;
+        height: 160px;
     }
     .pose-bar {
         padding: 9px;
@@ -412,7 +435,7 @@ pre {
 }
 @media (max-height: 560px) {
     .diagnostics {
-        height: 110px;
+        height: 135px;
     }
     .diagnostics canvas {
         height: 70px;

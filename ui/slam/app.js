@@ -119,9 +119,10 @@ let mapEntries = [],
     mapOptionKey = "",
     mapDefaultsSession = null,
     mapConfirmationPending = false,
-    commandPendingUntil = 0,
+    commandRequest = null,
     lastOperation = "",
-    processingRequest = null;
+    processingRequest = null,
+    elevatorRequest = null;
 const runningStates = new Set([
     "CONFIGURING_CAMERA",
     "STARTING",
@@ -210,6 +211,19 @@ async function changeProcessing() {
 }
 $("backend-enabled").addEventListener("change", changeProcessing);
 $("dense-reconstruction").addEventListener("change", changeProcessing);
+$("elevator-enabled").addEventListener("change", async () => {
+    const enabled = $("elevator-enabled").checked;
+    elevatorRequest = { enabled, session: lastData?.state?.session_id };
+    applyMapControls(lastData || {});
+    try {
+        error("");
+        await api("command", { command: "SET_ELEVATOR", args: { enabled } });
+    } catch (e) {
+        elevatorRequest = null;
+        error(e.message);
+        applyMapControls(lastData || {});
+    }
+});
 action("refresh-maps", () => api("maps"));
 async function confirmMapRebuild(name) {
     const dialog = $("map-confirm-dialog");
@@ -236,7 +250,8 @@ async function confirmMapRebuild(name) {
 }
 document.querySelectorAll("[data-command]").forEach((button) =>
     button.addEventListener("click", async () => {
-        if (mapConfirmationPending) return;
+        if (mapConfirmationPending || commandRequest || button.disabled) return;
+        let request = null;
         try {
             error("");
             const command = button.dataset.command;
@@ -251,23 +266,40 @@ document.querySelectorAll("[data-command]").forEach((button) =>
                 return;
             // The connection or algorithm state may change while the dialog is open.
             if (button.disabled || session !== lastData?.state?.session_id) return;
-            commandPendingUntil = performance.now() + 1500;
+            request = commandRequest = { command, session };
             applyMapControls(lastData || {});
             await api("command", { command, args });
         } catch (e) {
-            commandPendingUntil = 0;
+            if (commandRequest === request) commandRequest = null;
             error(e.message);
+            applyMapControls(lastData || {});
         }
     }),
 );
 function applyMapControls(data) {
     const state = data.state || {},
         ready = state.connection === "READY";
+    const active = runningStates.has(state.state);
+    if (commandRequest &&
+        (!ready || commandRequest.session !== state.session_id ||
+         (commandRequest.command === "START"
+             ? active
+             : state.state === "STOPPING" || !active)))
+        commandRequest = null;
+    const operation = state.last_result,
+        operationKey = operation?.operation_id || JSON.stringify(operation);
+    if ((operation?.status === "failed" || operation?.code) &&
+        operationKey !== lastOperation) {
+        lastOperation = operationKey;
+        processingRequest = null;
+        elevatorRequest = null;
+        commandRequest = null;
+        error(mapError(operation.message || "板端操作失败"));
+    }
     const supported =
         Array.isArray(state.capabilities) &&
         state.capabilities.includes("map_management");
-    const active = runningStates.has(state.state),
-        pending = mapConfirmationPending || performance.now() < commandPendingUntil;
+    const pending = mapConfirmationPending || !!commandRequest;
     const runtimeProcessing = state.capabilities?.includes("runtime_processing");
     if (processingRequest &&
         (!ready || processingRequest.session !== state.session_id ||
@@ -275,6 +307,11 @@ function applyMapControls(data) {
           state.backend_enabled === processingRequest.backend_enabled &&
           state.dense_reconstruction === processingRequest.dense_reconstruction)))
         processingRequest = null;
+    if (elevatorRequest &&
+        (!ready || elevatorRequest.session !== state.session_id ||
+         (!state.elevator_options_pending &&
+          state.elevator_enabled === elevatorRequest.enabled)))
+        elevatorRequest = null;
     const defaults = data.descriptors?.map_options;
     if (ready && defaults && mapDefaultsSession !== state.session_id) {
         mapDefaultsSession = state.session_id;
@@ -300,6 +337,17 @@ function applyMapControls(data) {
         (!active || state.state === "RUNNING" || state.state === "INITIALIZING");
     $("backend-enabled").disabled = !canChange;
     $("dense-reconstruction").disabled = !canChange || !$("backend-enabled").checked;
+    if (!elevatorRequest)
+        $("elevator-enabled").checked = state.elevator_enabled === true;
+    const elevatorChanging = !!elevatorRequest || state.elevator_options_pending;
+    $("elevator-enabled").disabled = !ready ||
+        !state.capabilities?.includes("runtime_elevator") || pending ||
+        elevatorChanging || state.state === "STOPPING";
+    $("elevator-hint").textContent = elevatorChanging
+        ? "正在切换电梯运动估计…"
+        : $("elevator-enabled").checked
+          ? "自动估计电梯的竖直运动，可在运行中关闭。"
+          : "默认关闭，可在运行中开启。";
     $("reconstruction-hint").textContent = changing
         ? "正在切换处理模式…"
         : !$("backend-enabled").checked
@@ -319,6 +367,7 @@ function applyMapControls(data) {
         active ||
         pending ||
         changing ||
+        elevatorChanging ||
         !valid ||
         state.calibration_ready === false ||
         state.model_ready === false;
@@ -357,16 +406,6 @@ function applyMapControls(data) {
             : data.map_catalog?.loading
               ? "正在读取板端地图列表…"
               : hints[$("map-mode").value];
-    const operation = state.last_result;
-    if (
-        operation?.status === "failed" &&
-        operation.operation_id !== lastOperation
-    ) {
-        lastOperation = operation.operation_id;
-        processingRequest = null;
-        commandPendingUntil = 0;
-        error(mapError(operation.message || "板端操作失败"));
-    }
 }
 function clearPreview(message = "左目图像订阅已关闭") {
     const img = $("image0");
@@ -404,15 +443,9 @@ $("dense").addEventListener("change", () => {
 action("clear", () => api("clear"));
 action("home", () => rendering?.home(false));
 action("top", () => rendering?.home(true));
+action("enable-imu", () => api("enable_imu"));
 const fixed = (v, n = 3) =>
     Number.isFinite(Number(v)) ? Number(v).toFixed(n) : "—";
-function frequency(mhz) {
-    if (mhz == null || !Number.isFinite(Number(mhz)) || Number(mhz) <= 0)
-        return "—";
-    return Number(mhz) >= 1000
-        ? `${fixed(Number(mhz) / 1000, 3)} GHz`
-        : `${fixed(mhz, 0)} MHz`;
-}
 const timingRows = [
     ["processing_ms", "位姿处理"],
     ["mapping_ms", "地图处理（最近10帧平均）"],
@@ -518,15 +551,19 @@ function apply(data) {
         state.rtt_ms == null ? "—" : `${fixed(state.rtt_ms, 1)} ms`;
     $("pose-rate").textContent =
         state.pose_rate_hz == null ? "—" : `${fixed(state.pose_rate_hz, 1)} Hz`;
-    $("processing").textContent =
-        state.processing_ms == null
-            ? "—"
-            : `${fixed(state.processing_ms, 1)} ms`;
-    $("board-temperature").textContent =
-        state.board_temperature_c == null
-            ? "—"
-            : `${fixed(state.board_temperature_c, 1)} °C`;
-    $("cpu-frequency").textContent = frequency(state.cpu_big_current_mhz);
+    const imuStatus = data.imu_status || "waiting";
+    $("imu-preview-status").textContent = $("pause-view").checked ? "曲线显示已暂停" : {
+        live: "IMU 实时数据 · X / Y / Z",
+        dense: "稠密重建期间暂停 IMU 上传",
+        disabled: "IMU 上传未开启",
+        offline: "相机未连接",
+        waiting: "等待 IMU 数据",
+    }[imuStatus] || "等待 IMU 数据";
+    $("enable-imu").hidden = imuStatus !== "disabled";
+    if (imuStatus !== "live") {
+        gyroSamples.length = 0;
+        accelSamples.length = 0;
+    }
     applyTiming(state);
     // Until 3D is ready, use the SDK's accepted map rather than an independently
     // timed device status. The renderer below owns the displayed count once ready.
@@ -618,6 +655,7 @@ async function scene() {
             { LineSegmentsGeometry },
             { LineMaterial },
             { MapLayer },
+            { TrajectoryLayer },
         ] = await Promise.all([
             import("./vendor/three/three.module.js"),
             import("./vendor/three/OrbitControls.js"),
@@ -625,6 +663,7 @@ async function scene() {
             import("./vendor/three/lines/LineSegmentsGeometry.js"),
             import("./vendor/three/lines/LineMaterial.js"),
             import("./map_layer.js"),
+            import("./trajectory_layer.js"),
         ]);
         const container = $("scene"),
             world = new THREE.Scene();
@@ -637,6 +676,23 @@ async function scene() {
         // Apply pointer deltas immediately; no inertial tail after releasing.
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = false;
+        const scale = $("map-scale"), scaleLabel = $("map-scale-label"),
+            scaleLine = $("map-scale-line"), direction = new THREE.Vector3(),
+            toTarget = new THREE.Vector3();
+        function updateScale(width, height) {
+            camera.getWorldDirection(direction);
+            const depth = toTarget.subVectors(controls.target, camera.position).dot(direction);
+            const metresPerPixel = 2 * depth * Math.tan(THREE.MathUtils.degToRad(camera.getEffectiveFOV()) / 2) / height;
+            const target = metresPerPixel * Math.min(120, width * 0.25);
+            if (!Number.isFinite(target) || target <= 0) { scale.hidden = true; return; }
+            const power = 10 ** Math.floor(Math.log10(target)), fraction = target / power,
+                length = (fraction >= 5 ? 5 : fraction >= 2 ? 2 : 1) * power;
+            const units = length >= 1000 ? [1000, "km"] : length >= 1 ? [1, "m"] :
+                length >= .01 ? [.01, "cm"] : [.001, "mm"];
+            scaleLabel.textContent = `${Number((length / units[0]).toPrecision(3))} ${units[1]}`;
+            scaleLine.style.width = `${length / metresPerPixel}px`;
+            scale.hidden = false;
+        }
         let interacting = false,
             renderNeeded = true;
         controls.addEventListener("change", () => {
@@ -659,11 +715,14 @@ async function scene() {
         body.visible = false;
         const mapLayer = new MapLayer();
         world.add(mapLayer.points, mapLayer.keyframes);
+        const trajectory = new TrajectoryLayer();
+        world.add(trajectory.line);
         let descriptorKey = "",
             targetPosition = new THREE.Vector3(),
             targetQuaternion = new THREE.Quaternion(),
             havePose = false;
-        const bodyStep = new THREE.Vector3();
+        const bodyStep = new THREE.Vector3(),
+            bodyRotationStep = new THREE.Quaternion();
         $("follow").addEventListener("change", () => {
             if ($("follow").checked && havePose) {
                 bodyStep.subVectors(body.position, controls.target);
@@ -673,12 +732,14 @@ async function scene() {
             }
         });
         function home(top) {
+            camera.up.set(0, 0, 1);
             camera.position.set(top ? 0 : 4, top ? -0.01 : -6, top ? 10 : 4);
             controls.target.set(0, 0, 0);
             controls.update();
         }
         function clear() {
             mapLayer.clear();
+            trajectory.clear();
             havePose = false;
             body.visible = false;
             renderNeeded = true;
@@ -771,6 +832,10 @@ async function scene() {
         }
         function update(data) {
             if (frustums(data.descriptors || {})) renderNeeded = true;
+            if (data.pose && data.state.connection === "READY") {
+                if (trajectory.record(data.pose) && trajectory.line.visible)
+                    renderNeeded = true;
+            } else trajectory.breakSegment();
             const delta = data.map_delta;
             if (delta) {
                 mapLayer.apply(delta);
@@ -838,25 +903,35 @@ async function scene() {
                 body.visible !== bodyVisible ||
                 grid.visible !== gridVisible ||
                 mapLayer.keyframes.visible !== $("show-keyframes").checked ||
+                trajectory.line.visible !== $("show-trajectory").checked ||
                 mapLayer.points.visible !== pointsVisible
             )
                 renderNeeded = true;
             body.visible = havePose && $("show-body").checked;
             grid.visible = worldAxes.visible = $("show-grid").checked;
             mapLayer.keyframes.visible = $("show-keyframes").checked;
+            trajectory.line.visible = $("show-trajectory").checked;
             mapLayer.points.visible = pointsVisible;
             if (havePose && !$("pause-view").checked) {
                 bodyStep.copy(body.position);
+                bodyRotationStep.copy(body.quaternion).invert();
                 body.position.copy(targetPosition);
-                bodyStep.subVectors(body.position, bodyStep);
                 body.quaternion.copy(targetQuaternion);
                 if ($("follow").checked && !interacting) {
-                    camera.position.add(bodyStep);
-                    controls.target.add(bodyStep);
+                    // Carry the whole view in the device frame, preserving
+                    // the user's viewing offset through translation and rotation.
+                    bodyRotationStep.premultiply(body.quaternion).normalize();
+                    camera.position.sub(bodyStep)
+                        .applyQuaternion(bodyRotationStep).add(body.position);
+                    controls.target.sub(bodyStep)
+                        .applyQuaternion(bodyRotationStep).add(body.position);
+                    camera.up.applyQuaternion(bodyRotationStep).normalize();
                 }
             }
             controls.update();
             if (renderNeeded && !$("pause-view").checked && !document.hidden) {
+                updateScale(width, height);
+                if (trajectory.line.visible) trajectory.prepareRender();
                 renderer.render(world, camera);
                 renderNeeded = false;
             }

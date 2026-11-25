@@ -289,9 +289,9 @@ h2 {
     min-height: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-columns: minmax(240px, var(--previewWeight, 1.15fr)) 12px minmax(360px, 1fr);
     align-content: stretch;
-    gap: 14px;
+    gap: 0;
     padding: 14px;
 }
 .card {
@@ -665,15 +665,67 @@ legend {
     }
 }
 
+.panel-splitter {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    touch-action: none;
+    cursor: row-resize;
+    border-radius: 4px;
+    outline-offset: -2px;
+}
+.panel-splitter::after {
+    content: "";
+    position: absolute;
+    inset: 5px 35%;
+    border-radius: 2px;
+    background: #42566f;
+}
+#preview-splitter { cursor: col-resize; }
+#preview-splitter::after { inset: 35% 5px; }
+.panel-splitter:hover, .panel-splitter:focus-visible { background: #25445d; }
+.resizing-panels, .resizing-panels * { user-select: none !important; }
+.resizing-panels iframe { pointer-events: none; }
+.stereo-reticle {
+    position: absolute;
+    width: 21px;
+    height: 21px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 2;
+}
+.stereo-reticle::before, .stereo-reticle::after {
+    content: "";
+    position: absolute;
+    background: #eaff50;
+    box-shadow: 0 0 0 1px #071017;
+}
+.stereo-reticle::before { left: 10px; top: 0; width: 1px; height: 21px; }
+.stereo-reticle::after { top: 10px; left: 0; height: 1px; width: 21px; }
+.stereo-depth-readout {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    max-width: calc(100% - 10px);
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(5, 12, 20, .88);
+    color: #ecf4ff;
+    font: 11px/1.5 ui-monospace, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 2;
+}
 /* Keep the paired rectified images above their point cloud in the right column. */
 .stereo-card {
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: minmax(310px, var(--disparityWeight, 1.35fr)) 12px minmax(155px, 1fr);
     overflow-y: auto;
 }
 .disparity-panel {
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     flex: 1 0 260px;
@@ -727,7 +779,7 @@ legend {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     flex: 1;
-    min-height: 132px;
+    min-height: 70px;
 }
 .stereo-image {
     margin: 0;
@@ -743,7 +795,7 @@ legend {
 }
 .disparity-wrap {
     position: relative;
-    min-height: 110px;
+    min-height: 65px;
     display: grid;
     place-items: center;
     flex: 1;
@@ -770,12 +822,12 @@ legend {
 }
 .cloud-panel {
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     flex: 1 0 210px;
-    border-top: 1px solid var(--border);
-    margin-top: 8px;
-    padding-top: 14px;
+    margin-top: 0;
+    padding-top: 0;
 }
 .cloud-panel .card-title {
     flex-wrap: wrap;
@@ -783,7 +835,7 @@ legend {
 .cloud-wrap {
     position: relative;
     flex: 1;
-    min-height: 110px;
+    min-height: 65px;
     overflow: hidden;
     border-radius: 7px;
     border: 1px solid #233246;
@@ -805,6 +857,8 @@ legend {
     display: none !important;
 }
 @media (max-width: 900px) {
+    #preview-splitter { cursor: row-resize; }
+    #preview-splitter::after { inset: 5px 35%; }
     #tab-camera.tab-panel.active {
         overflow-y: auto;
     }
@@ -812,14 +866,15 @@ legend {
         height: auto;
         min-height: 100%;
         grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: var(--previewHeight, 360px) 12px minmax(600px, 1fr);
         align-content: start;
     }
     .preview-card {
-        height: 60vh;
-        min-height: 300px;
+        height: 100%;
+        min-height: 0;
     }
     .stereo-card {
-        min-height: 740px;
+        min-height: 600px;
         overflow: visible;
     }
 }

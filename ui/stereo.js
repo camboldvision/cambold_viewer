@@ -3,20 +3,86 @@
 (() => {
     "use strict";
     const $ = (id) => document.getElementById(id);
+    const colorDisparityMax = 192;
     let enabled = false,
         online = false,
         lastId = "0",
         pending = false,
         dirty = false;
-    let configTarget = null,
-        configError = "";
+    let enableRequest = null,
+        remoteState = {},
+        configTarget = null,
+        configError = "",
+        configurationLocked = false;
     let latest = null,
         cloud = null,
         frames = 0,
         rateStart = performance.now();
     let modeWidth = 0,
+        modeHeight = 0,
         streamEpoch = 0,
         allModes = [];
+    let rangeFrame = null, rangePointer = null;
+    const rangeOverlays = [];
+    // Canvas pixels have already been rotated for display. Invert that exact
+    // permutation to look up the original FP16 sample, never the colour image.
+    function updateRange() {
+        for (const entry of rangeOverlays) {
+            entry.cross.hidden = true;
+            entry.label.hidden = true;
+        }
+        if (!rangeFrame || !rangePointer || !enabled || document.hidden) return;
+        const { w, h, projection, focal, baseline, cx, cy, fy, header, view } = rangeFrame,
+            dw = projection === 1 ? h : w, dh = projection === 1 ? w : h;
+        function imageBox(canvas) {
+            const r = canvas.getBoundingClientRect(), factor = Math.min(r.width / dw, r.height / dh);
+            return { left: r.left + (r.width - dw * factor) / 2,
+                top: r.top + (r.height - dh * factor) / 2, factor };
+        }
+        const source = imageBox(rangePointer.canvas);
+        if (!(source.factor > 0)) return;
+        const sx = Math.floor((rangePointer.x - source.left) / source.factor),
+            sy = Math.floor((rangePointer.y - source.top) / source.factor);
+        if (sx < 0 || sx >= dw || sy < 0 || sy >= dh) return;
+        const column = projection === 1 ? sy : sx,
+            row = projection === 1 ? h - 1 - sx : sy,
+            d = fp16Pixels[view.getUint16(header + 2 * (row * w + column), true)],
+            depth = focal * baseline / d,
+            range = depth * Math.hypot(1, (column - cx) / focal,
+                projection === 1 ? 0 : (row - cy) / fy);
+        const valid = Number.isFinite(d) && d > 0 && Number.isFinite(range) && range > 0;
+        const text = valid
+            ? `${projection === 1 ? "径向深度" : "深度"} ${depth.toFixed(3)} m · 距离 ${range.toFixed(3)} m`
+            : "无有效深度";
+        for (const entry of rangeOverlays) {
+            const box = imageBox(entry.canvas), parent = entry.canvas.parentElement.getBoundingClientRect();
+            if (!(box.factor > 0)) continue;
+            entry.cross.style.left = `${box.left - parent.left - entry.canvas.parentElement.clientLeft + (sx + .5) * box.factor}px`;
+            entry.cross.style.top = `${box.top - parent.top - entry.canvas.parentElement.clientTop + (sy + .5) * box.factor}px`;
+            entry.cross.hidden = entry.label.hidden = false;
+            entry.label.textContent = `${text} · (${column}, ${row})`;
+        }
+    }
+    function bindRange() {
+        for (const id of ["rectified-canvas", "disparity-canvas"]) {
+            const canvas = $(id), parent = canvas.parentElement,
+                cross = document.createElement("span"), label = document.createElement("span");
+            cross.className = "stereo-reticle";
+            cross.setAttribute("aria-hidden", "true");
+            label.className = "stereo-depth-readout";
+            cross.hidden = label.hidden = true;
+            parent.append(cross, label);
+            rangeOverlays.push({ canvas, cross, label });
+            parent.addEventListener("pointermove", (event) => {
+                rangePointer = { canvas, x: event.clientX, y: event.clientY };
+                updateRange();
+            });
+            parent.addEventListener("pointerleave", () => { rangePointer = null; updateRange(); });
+            new ResizeObserver(updateRange).observe(parent);
+        }
+        window.addEventListener("blur", () => { rangePointer = null; updateRange(); });
+        document.addEventListener("visibilitychange", () => { rangePointer = null; updateRange(); });
+    }
     function populateModes(projection, selected) {
         const modes = allModes.filter(
             (m) => Number(m.projection || 0) === projection,
@@ -52,28 +118,65 @@
         }
         return a;
     }
+    function configurationError(code) {
+        return ({
+            "-16": "相机正在被 SLAM 或其他任务使用。请先停止并保存 SLAM 地图，再修改深度参数。",
+            "-22": "设备不支持这组深度参数，请检查分辨率、焦距和 FOV。",
+            "-107": "相机连接已断开，请重新连接后再修改参数。",
+            "-5": "设备写入或校验深度配置失败，请检查相机存储状态后重试。",
+            "-11": "相机尚未就绪，请稍后重试。",
+        })[String(code)] || `深度参数修改失败，设备返回错误码 ${code}。`;
+    }
     window.updateStereoState = (remote) => {
+        remoteState = remote;
         const info = remote.stereo || {},
             flags = Number(info.flags || 0);
         online = !!remote.connected;
+        configurationLocked = !!remote.stereo_config_locked;
+        if (enableRequest) {
+            const reply = remote.stereo_enable_reply || {},
+                acknowledged = enableRequest.requestId &&
+                    String(reply.request_id) === enableRequest.requestId && reply.completed;
+            if (!online || acknowledged) {
+                configError = !online
+                    ? configurationError(-107)
+                    : Number(reply.result) !== 0
+                      ? configurationError(Number(reply.result))
+                      : "";
+                pending = false;
+                enableRequest = null;
+            }
+        }
         if (configTarget) {
-            if (
+            const reply = remote.stereo_config_reply || {},
+                acknowledged = configTarget.requestId &&
+                    String(reply.request_id) === configTarget.requestId && reply.completed;
+            if (!online || (acknowledged && Number(reply.result) !== 0)) {
+                configError = configurationError(online ? Number(reply.result) : -107);
+                pending = false;
+                configTarget = null;
+            } else if (
+                acknowledged && reply.status_received &&
                 Number(info.mode) === configTarget.mode &&
                 Number(info.projection || 0) === configTarget.projection &&
-                Math.abs(Number(info.vertical_fov || 180) - configTarget.fov) <
+                Math.abs(Number(info.vertical_fov ?? 180) - configTarget.fov) <
                     0.001 &&
                 Math.abs(Number(info.focal) - configTarget.focal) <=
-                    Math.max(1e-6, configTarget.focal * 1e-6)
+                    Math.max(1e-6, configTarget.focal * 1e-6) &&
+                Math.abs(Number(info.cy) - configTarget.cy) <=
+                    Math.max(1e-5, Math.abs(configTarget.cy) * 1e-6)
             ) {
                 dirty = false;
                 pending = false;
                 configTarget = null;
                 configError = "";
-            } else if (!online || performance.now() > configTarget.deadline) {
+            } else if (performance.now() > configTarget.deadline) {
                 pending = false;
                 configTarget = null;
                 configError =
-                    "The camera did not confirm the configuration. Check the connection and EEPROM, then apply again.";
+                    acknowledged
+                        ? "设备返回的深度配置与请求不一致，请重新读取参数后重试。"
+                        : "等待设备确认深度参数超时，请检查连接后重试。";
             }
         }
         const was = enabled;
@@ -96,11 +199,15 @@
             $("stereo-mode").dataset.modes = signature;
         }
         const modes = allModes;
-        if (!dirty && document.activeElement !== $("stereo-focal")) {
+        if (!dirty && !["stereo-focal", "stereo-cy", "stereo-fov"].includes(document.activeElement?.id)) {
             $("stereo-mode").value = String(info.mode || "");
             $("stereo-usage").value = String(info.projection || 0);
             $("stereo-fov").value = String(info.vertical_fov || 180);
             if (info.focal > 0) $("stereo-focal").value = String(info.focal);
+            const currentMode = modes.find((m) => Number(m.id) === Number(info.mode));
+            if (Number.isFinite(info.cy)) $("stereo-cy").value = String(info.cy);
+            else if (currentMode) $("stereo-cy").value = String((Number(currentMode.height) - 1) / 2);
+            modeHeight = Number(currentMode?.height) || 0;
             modeWidth =
                 Number(
                     modes.find((m) => Number(m.id) === Number(info.mode))
@@ -113,9 +220,9 @@
         );
         const maxFps = Number(selected?.max_fps) || 20;
         $("stereo-rate-note").textContent =
-            `Normalized disparity: blue min → red max · Black: invalid · Max ${maxFps} fps`;
+            `Disparity: blue 0 → red ${colorDisparityMax} px · Black: invalid · Max ${maxFps} fps`;
         $("stereo-rate-note").title =
-            `Colors are normalized to each frame's valid disparity range. Enabling disparity lowers a higher camera rate to this mode's ${maxFps} fps limit.`;
+            `Fixed disparity color scale: ${colorDisparityMax} px and above are red. Enabling disparity lowers a higher camera rate to this mode's ${maxFps} fps limit.`;
         $("stereo-enable").disabled =
             pending || (!enabled && (!available || dirty));
         $("stereo-enable").textContent = pending
@@ -127,15 +234,18 @@
             "stereo-usage",
             "stereo-mode",
             "stereo-focal",
+            "stereo-cy",
             "stereo-fov",
             "stereo-apply",
         ])
-            $(id).disabled = pending || enabled || !available;
+            $(id).disabled = pending || enabled || !available || configurationLocked;
         const reason =
-            info.message ||
             configError ||
             (!online
                 ? "Camera offline"
+                : configurationLocked
+                  ? "SLAM 正在使用当前相机参数。请先停止并保存地图，再修改深度参数；深度预览可独立开关。"
+                  : info.message ? info.message
                 : !available
                   ? "Stereo matching unavailable: check calibration and installed models."
                   : enabled
@@ -144,10 +254,13 @@
                       ? "Apply the mode/focal changes before enabling disparity."
                       : "Ready · Configuration is saved in camera EEPROM");
         $("stereo-notice").textContent = reason;
-        $("stereo-notice").classList.toggle("validation-error", !!info.error);
+        $("stereo-notice").classList.toggle("validation-error", !!info.error || !!configError);
         if (!enabled && was) {
             lastId = "0";
             latest = null;
+            rangeFrame = null;
+            rangePointer = null;
+            updateRange();
             frames = 0;
             rateStart = performance.now();
             for (const name of ["rectified", "disparity"]) {
@@ -243,10 +356,7 @@
                     x: e.clientX,
                     y: e.clientY,
                     pan: e.button !== 0 || e.shiftKey,
-                    pivot:
-                        e.button === 0 && !e.shiftKey
-                            ? this.pickPoint(e.clientX, e.clientY)
-                            : null,
+                    pivot: this.pickPoint(e.clientX, e.clientY),
                 };
                 canvas.setPointerCapture(e.pointerId);
                 canvas.style.cursor = drag.pan ? "move" : "grabbing";
@@ -261,16 +371,8 @@
                     dy = e.clientY - drag.y;
                 drag.x = e.clientX;
                 drag.y = e.clientY;
-                if (drag.pan) {
-                    const { right, up } = this.viewBasis();
-                    // A pixel at the orbit focus follows a pixel of mouse
-                    // movement, independent of yaw, pitch, zoom and DPI.
-                    const s =
-                        (2 * this.distance * Math.tan(Math.PI / 6)) /
-                        Math.max(1, canvas.clientHeight);
-                    for (let i = 0; i < 3; i++)
-                        this.target[i] += (-dx * right[i] + dy * up[i]) * s;
-                } else this.rotate(dx, dy, drag.pivot);
+                if (drag.pan) this.pan(dx, dy, drag.pivot);
+                else this.rotate(dx, dy, drag.pivot);
                 this.render();
             });
             for (const event of [
@@ -287,13 +389,10 @@
                 "wheel",
                 (e) => {
                     e.preventDefault();
-                    this.distance = Math.max(
-                        0.03,
-                        Math.min(
-                            1000,
-                            this.distance * Math.exp(e.deltaY * 0.001),
-                        ),
-                    );
+                    const pixels = e.deltaY *
+                        (e.deltaMode === 1 ? 16 :
+                            e.deltaMode === 2 ? canvas.clientHeight : 1);
+                    this.zoom(Math.max(-160, Math.min(160, pixels)));
                     this.render();
                 },
                 { passive: false },
@@ -330,7 +429,7 @@
                 hits = [];
             let closest = 8 * 8;
             // Pick in CSS pixels so the hit radius is independent of zoom
-            // and display DPI. This scan runs only when a rotation starts.
+            // and display DPI. This scan runs only when a drag starts.
             for (let i = 0; i < points.length; i += 6) {
                 const x = points[i],
                     y = points[i + 1],
@@ -365,6 +464,24 @@
             return selected
                 ? Array.from(points.subarray(selected.index, selected.index + 3))
                 : null;
+        }
+        pan(dx, dy, pivot = null) {
+            const { right, up, back } = this.viewBasis(),
+                rect = this.canvas.getBoundingClientRect();
+            // Keep the surface picked at pointer-down on a screen-parallel
+            // plane. Its projected movement then matches the mouse exactly.
+            const depth = pivot
+                ? this.distance - pivot.reduce(
+                    (sum, v, i) => sum + (v - this.target[i]) * back[i], 0)
+                : this.distance;
+            if (!(depth > 0) || !(rect.height > 0)) return;
+            const scale = 2 * depth * Math.tan(Math.PI / 6) / rect.height;
+            for (let i = 0; i < 3; i++)
+                this.target[i] += (-dx * right[i] + dy * up[i]) * scale;
+        }
+        zoom(pixels) {
+            this.distance = Math.max(
+                0.03, Math.min(1000, this.distance * Math.exp(pixels * 0.00025)));
         }
         rotate(dx, dy, pivot = null) {
             const pixels = Math.hypot(dx, dy);
@@ -428,8 +545,9 @@
         render() {
             const c = this.canvas,
                 gl = this.gl,
-                w = Math.max(1, c.clientWidth),
-                h = Math.max(1, c.clientHeight),
+                rect = c.getBoundingClientRect(),
+                w = Math.max(1, rect.width),
+                h = Math.max(1, rect.height),
                 ratio = Math.min(2, devicePixelRatio || 1);
             if (
                 c.width !== Math.round(w * ratio) ||
@@ -581,18 +699,7 @@
             colorRgba = colorImage.data;
         const points = new Float32Array(pixels * 6),
             limit = Number($("cloud-depth").value) || 10;
-        let count = 0,
-            minDisparity = Infinity,
-            maxDisparity = 0;
-        // Normalize valid disparities independently for every frame: the
-        // largest disparity is red and the smallest disparity is blue.
-        for (let i = 0; i < pixels; i++) {
-            const d = fp16Pixels[v.getUint16(header + i * 2, true)];
-            if (!Number.isFinite(d) || d <= 0) continue;
-            minDisparity = Math.min(minDisparity, d);
-            maxDisparity = Math.max(maxDisparity, d);
-        }
-        const disparityRange = maxDisparity - minDisparity;
+        let count = 0;
         for (let i = 0; i < pixels; i++) {
             const row = Math.floor(i / w),
                 column = i % w;
@@ -614,15 +721,8 @@
             colorRgba[offset + 2] = b * 255;
             colorRgba[offset + 3] = 255;
             if (!Number.isFinite(d) || d <= 0) continue;
-            const t =
-                disparityRange > 0
-                    ? Math.max(
-                          0,
-                          Math.min(1, (d - minDisparity) / disparityRange),
-                      )
-                    : 1;
-            // Keep the blue/cyan/green/yellow/red palette with full-intensity
-            // endpoints for the farthest and nearest valid samples.
+            const t = Math.min(1, d / colorDisparityMax);
+            // Use a fixed scale so a disparity keeps its color across frames.
             rgba[offset] = 255 * Math.max(0, Math.min(1, 4 * t - 2));
             rgba[offset + 1] =
                 255 * Math.max(0, Math.min(1, 2 - Math.abs(4 * t - 2)));
@@ -658,6 +758,8 @@
             `${(count / 6).toLocaleString()} points · ${w} × ${h}`;
         if (cloud) cloud.setPoints(points.subarray(0, count));
         latest = buffer;
+        rangeFrame = { w, h, projection, focal, baseline, cx, cy, fy, header, view: v };
+        updateRange();
         lastId = frameId;
         if (force) return;
         frames++;
@@ -687,6 +789,7 @@
         setTimeout(poll, Math.max(1, 40 - (performance.now() - start)));
     }
     document.addEventListener("DOMContentLoaded", () => {
+        bindRange();
         try {
             cloud = new Cloud($("cloud-canvas"));
         } catch (e) {
@@ -697,53 +800,60 @@
             configError = "";
             $("stereo-enable").disabled = true;
         };
+        const rescaleGeometry = (scaleFocal = true) => {
+            const mode = allModes.find((m) => Number(m.id) === Number($("stereo-mode").value)),
+                width = Number(mode?.width) || 0,
+                height = Number(mode?.height) || 0,
+                focal = Number($("stereo-focal").value),
+                cy = Number($("stereo-cy").value),
+                scaled = (focal * width) / modeWidth;
+            if (scaleFocal && modeWidth > 0 && width > 0 && focal > 0 && Number.isFinite(scaled))
+                $("stereo-focal").value = String(Number(scaled.toPrecision(7)));
+            if (height > 0)
+                $("stereo-cy").value = String(Number((modeHeight > 0 && Number.isFinite(cy)
+                    ? (cy + 0.5) * height / modeHeight - 0.5
+                    : (height - 1) / 2).toPrecision(8)));
+            modeWidth = width;
+            modeHeight = height;
+            markDirty();
+        };
         $("stereo-usage").addEventListener("change", () => {
             const p = Number($("stereo-usage").value);
             populateModes(p, 0);
-            modeWidth =
-                Number(
-                    allModes.find(
-                        (m) => Number(m.id) === Number($("stereo-mode").value),
-                    )?.width,
-                ) || 0;
-            markDirty();
+            rescaleGeometry(false);
         });
         $("stereo-fov").addEventListener("input", markDirty);
-        $("stereo-mode").addEventListener("change", () => {
-            const modes = allModes;
-            const width =
-                Number(
-                    modes.find(
-                        (m) => Number(m.id) === Number($("stereo-mode").value),
-                    )?.width,
-                ) || 0;
-            const focal = Number($("stereo-focal").value),
-                scaled = (focal * width) / modeWidth;
-            // Preserve horizontal field of view when choosing more pixels.
-            // The resulting pixel focal length remains freely editable.
-            if (
-                modeWidth > 0 &&
-                width > 0 &&
-                focal > 0 &&
-                Number.isFinite(scaled)
-            )
-                $("stereo-focal").value = String(Number(scaled.toPrecision(7)));
-            modeWidth = width;
-            markDirty();
-        });
+        $("stereo-mode").addEventListener("change", () => rescaleGeometry());
         $("stereo-focal").addEventListener("input", markDirty);
+        $("stereo-cy").addEventListener("input", markDirty);
         $("stereo-enable").addEventListener("click", async () => {
+            if (pending || $("stereo-enable").disabled) return;
+            const target = enabled ? 0 : 1,
+                request = enableRequest = { requestId: null };
             pending = true;
-            $("stereo-enable").disabled = true;
-            const ok = await call("host_set_stereo", enabled ? 0 : 1);
-            if (!ok)
-                $("stereo-notice").textContent =
-                    "Unable to submit stereo request";
-            setTimeout(() => {
+            configError = "";
+            window.updateStereoState(remoteState);
+            try {
+                const reply = await call("host_set_stereo", target);
+                if (enableRequest !== request) return;
+                if (!reply?.ok)
+                    throw new Error(configurationError(reply?.result ?? -107));
+                request.requestId = String(reply.request_id);
+            } catch (error) {
+                if (enableRequest !== request) return;
+                enableRequest = null;
                 pending = false;
-            }, 1200);
+                configError = error.message;
+            }
+            window.updateStereoState(remoteState);
         });
         $("stereo-apply").addEventListener("click", async () => {
+            if (pending) return;
+            if (configurationLocked) {
+                configError = configurationError(-16);
+                $("stereo-notice").textContent = configError;
+                return;
+            }
             const focal = Number($("stereo-focal").value),
                 mode = Number($("stereo-mode").value);
             if (!Number.isFinite(focal) || focal <= 0) {
@@ -752,33 +862,43 @@
                 return;
             }
             const projection = Number($("stereo-usage").value),
-                fov = Number($("stereo-fov").value);
+                fov = Number($("stereo-fov").value),
+                cy = Number($("stereo-cy").value);
+            if ($("stereo-cy").value.trim() === "" || !Number.isFinite(cy)) {
+                $("stereo-notice").textContent = "cy must be a finite number in output pixels.";
+                return;
+            }
             if (!Number.isFinite(fov) || fov < 30 || fov > 180) {
                 $("stereo-notice").textContent =
                     "Vertical FOV must be between 30° and 180°.";
                 return;
             }
             pending = true;
-            configTarget = {
+            configError = "";
+            const target = configTarget = {
                 mode,
-                focal,
+                focal: Math.fround(focal),
                 projection,
-                fov,
+                fov: Math.fround(fov),
+                cy: Math.fround(cy),
+                requestId: null,
                 deadline: performance.now() + 6000,
             };
             $("stereo-apply").disabled = true;
-            const ok = await call(
-                "host_configure_stereo",
-                mode,
-                focal,
-                projection,
-                fov,
-            );
-            if (!ok) {
+            try {
+                const reply = await call(
+                    "host_configure_stereo", mode, target.focal, projection, target.fov, target.cy,
+                );
+                if (configTarget !== target) return;
+                if (!reply?.ok) throw new Error(configurationError(reply?.result ?? -107));
+                target.requestId = String(reply.request_id);
+            } catch (error) {
+                if (configTarget !== target) return;
                 pending = false;
                 configTarget = null;
-                configError = "Unable to submit stereo configuration";
+                configError = error.message;
                 $("stereo-notice").textContent = configError;
+                $("stereo-notice").classList.add("validation-error");
             }
         });
         $("cloud-reset").addEventListener("click", () => {

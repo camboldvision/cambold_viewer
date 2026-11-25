@@ -172,6 +172,10 @@
             Number(remote.image_fps || 0).toFixed(1) + " Hz";
         $("imu-rate").textContent =
             Number(remote.imu_fps || 0).toFixed(1) + " Hz";
+        const bigMHz = Number(remote.cpu_big_current_mhz);
+        $("cpu-frequency").textContent = remote.connected && bigMHz > 0
+            ? bigMHz >= 1000 ? `${(bigMHz / 1000).toFixed(3)} GHz` : `${bigMHz.toFixed(0)} MHz`
+            : "--";
         if (remote.last_error) report(remote.last_error);
 
         if (
@@ -284,6 +288,12 @@
                     const active = panel.id === target;
                     panel.classList.toggle("active", active);
                     panel.hidden = !active;
+                    if (active) {
+                        for (const frame of panel.querySelectorAll("iframe[data-src]")) {
+                            frame.src = frame.dataset.src;
+                            delete frame.dataset.src;
+                        }
+                    }
                 });
                 if (target === "tab-terminal") {
                     if (typeof window.initTerminal === "function")
@@ -326,9 +336,94 @@
         });
     }
 
+    function bindPanelSizes() {
+        const layout = document.querySelector("#tab-camera .layout"),
+            preview = layout.querySelector(".preview-card"),
+            stereo = layout.querySelector(".stereo-card"),
+            disparity = stereo.querySelector(".disparity-panel"),
+            compact = window.matchMedia("(max-width: 900px)");
+        let sizes = {};
+        try { sizes = JSON.parse(localStorage.getItem("camera-panel-sizes") || "{}"); } catch (_) {}
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        function apply() {
+            for (const [key, owner, fallback, lo, hi] of [
+                ["previewWeight", layout, 1.15, 0.15, 6],
+                ["previewHeight", layout, 360, 250, 900],
+                ["disparityWeight", stereo, 1.35, 0.15, 6],
+            ]) {
+                const value = Number(sizes[key]);
+                sizes[key] = Number.isFinite(value) ? clamp(value, lo, hi) : fallback;
+                owner.style.setProperty("--" + key, sizes[key] + (key === "previewHeight" ? "px" : "fr"));
+            }
+        }
+        apply();
+        for (const [id, outer] of [["preview-splitter", true], ["stereo-splitter", false]]) {
+            const handle = $(id);
+            let drag = null;
+            const vertical = () => outer && !compact.matches;
+            function update(delta, startSize, available) {
+                if (outer && compact.matches) sizes.previewHeight = clamp(startSize + delta, 250, 900);
+                else {
+                    const min = outer ? 240 : 310, otherMin = outer ? 360 : 155;
+                    const size = clamp(startSize + delta, min, Math.max(min, available - otherMin));
+                    sizes[outer ? "previewWeight" : "disparityWeight"] = size / Math.max(1, available - size);
+                }
+                apply();
+                handle.setAttribute("aria-valuenow", String(Math.round(
+                    outer && compact.matches ? sizes.previewHeight :
+                    100 * sizes[outer ? "previewWeight" : "disparityWeight"] /
+                    (1 + sizes[outer ? "previewWeight" : "disparityWeight"]))));
+            }
+            function dimensions() {
+                const first = outer ? preview : disparity,
+                    second = outer ? stereo : $("cloud-card"),
+                    a = first.getBoundingClientRect(), b = second.getBoundingClientRect();
+                return vertical() ? [a.width, a.width + b.width] : [a.height, a.height + b.height];
+            }
+            handle.addEventListener("pointerdown", (event) => {
+                if (event.button !== 0) return;
+                event.preventDefault();
+                const [size, available] = dimensions();
+                drag = { pointer: event.pointerId, coordinate: vertical() ? event.clientX : event.clientY, size, available };
+                handle.setPointerCapture(event.pointerId);
+                document.body.classList.add("resizing-panels");
+            });
+            handle.addEventListener("pointermove", (event) => {
+                if (!drag || event.pointerId !== drag.pointer) return;
+                update((vertical() ? event.clientX : event.clientY) - drag.coordinate, drag.size, drag.available);
+            });
+            function finish() {
+                if (!drag) return;
+                drag = null;
+                document.body.classList.remove("resizing-panels");
+                try { localStorage.setItem("camera-panel-sizes", JSON.stringify(sizes)); } catch (_) {}
+            }
+            handle.addEventListener("lostpointercapture", finish);
+            handle.addEventListener("pointerup", finish);
+            handle.addEventListener("pointercancel", finish);
+            handle.addEventListener("keydown", (event) => {
+                const minus = vertical() ? "ArrowLeft" : "ArrowUp",
+                    plus = vertical() ? "ArrowRight" : "ArrowDown";
+                if (event.key !== minus && event.key !== plus) return;
+                event.preventDefault();
+                const [size, available] = dimensions();
+                update(event.key === minus ? -20 : 20, size, available);
+                try { localStorage.setItem("camera-panel-sizes", JSON.stringify(sizes)); } catch (_) {}
+            });
+            const orientation = () => {
+                handle.setAttribute("aria-orientation", vertical() ? "vertical" : "horizontal");
+                handle.setAttribute("aria-valuemin", outer && compact.matches ? "250" : "0");
+                handle.setAttribute("aria-valuemax", outer && compact.matches ? "900" : "100");
+            };
+            compact.addEventListener("change", orientation);
+            orientation();
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
         bindTabs();
         bindControls();
+        bindPanelSizes();
         const preview = $("preview");
         if (preview) {
             preview.addEventListener("load", fitPreviewVideo);

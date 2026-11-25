@@ -35,6 +35,9 @@
                     <div class="top-metric">
                         <span>Temp</span><strong id="temperature">--</strong>
                     </div>
+                    <div class="top-metric" title="CPU 大核当前频率">
+                        <span>Big cores</span><strong id="cpu-frequency">--</strong>
+                    </div>
                     <div class="top-metric">
                         <span>Image</span
                         ><strong id="image-rate">0.0 Hz</strong>
@@ -121,7 +124,7 @@
 
         <main class="tab-panels">
             <section id="tab-calibration" class="tab-panel" role="tabpanel" hidden>
-                <iframe id="calibration-view" src="/calibration/index.html" title="相机标定" style="width:100%;height:100%;border:0;min-height:0"></iframe>
+                <iframe id="calibration-view" data-src="/calibration/index.html" title="相机标定" style="width:100%;height:100%;border:0;min-height:0"></iframe>
             </section>
             <section id="tab-camera" class="tab-panel active" role="tabpanel">
                 <div class="layout">
@@ -157,6 +160,8 @@
                         </div>
                     </section>
 
+                    <div id="preview-splitter" class="panel-splitter" role="separator"
+                         tabindex="0" aria-label="调整 Live preview 宽度" aria-orientation="vertical"></div>
                     <section
                         class="card stereo-card"
                         aria-label="Rectified RGB, disparity and 3D point cloud"
@@ -197,6 +202,13 @@
                                         min="0"
                                         disabled
                                     />
+                                </div>
+                                <div
+                                    class="control-field"
+                                >
+                                    <label for="stereo-cy">Principal point cy (px)</label>
+                                    <input id="stereo-cy" type="number" step="any" disabled
+                                        title="Output pixel coordinates. Increase cy to crop more of the bottom of the scene." />
                                 </div>
                                 <div
                                     id="stereo-fov-field"
@@ -270,11 +282,13 @@
                             <p
                                 id="stereo-rate-note"
                                 class="subtle stereo-legend"
-                                title="Colors are normalized to each frame's valid disparity range: blue is the minimum and red is the maximum. Black indicates invalid disparity. Enabling disparity may lower the camera frame rate to the selected mode's limit."
+                                title="Fixed disparity color scale: 192 px and above are red. Black indicates invalid disparity. Enabling disparity may lower the camera frame rate to the selected mode's limit."
                             >
-                                Normalized disparity: blue min → red max · Black: invalid
+                                Disparity: blue 0 → red 192 px · Black: invalid
                             </p>
                         </section>
+                        <div id="stereo-splitter" class="panel-splitter" role="separator"
+                             tabindex="0" aria-label="调整视差图和点云高度" aria-orientation="horizontal"></div>
                         <section id="cloud-card" class="cloud-panel">
                             <div class="card-title">
                                 <h2>3D colored point cloud</h2>
@@ -286,7 +300,7 @@
                                 <canvas
                                     id="cloud-canvas"
                                     aria-label="Interactive rectified camera point cloud"
-                                    title="Drag a point: rotate around it · Right / middle / Shift drag: pan · Scroll: zoom · Metres"
+                                    title="Drag a point: rotate around it · Right / middle / Shift drag: move the picked surface · Scroll: fine zoom · Metres"
                                 ></canvas>
                             </div>
                             <div class="toolbar">
@@ -321,7 +335,7 @@
             <section id="tab-slam" class="tab-panel" role="tabpanel" hidden>
                 <iframe
                     id="slam-view"
-                    src="/slam/index.html"
+                    data-src="/slam/index.html"
                     title="CamBold SLAM"
                     style="width: 100%; height: 100%; border: 0; min-height: 0"
                 ></iframe>

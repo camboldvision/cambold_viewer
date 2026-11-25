@@ -35,6 +35,13 @@ struct UiState
     bool imu_enabled = false;
     cb_device_config device_config{};
     cb_stereo_status stereo_status{};
+    uint64_t stereo_enable_request = 0;
+    bool stereo_enable_completed = false;
+    int stereo_enable_result = 0;
+    uint64_t stereo_config_request = 0;
+    bool stereo_config_completed = false;
+    bool stereo_config_status_received = false;
+    int stereo_config_result = 0;
     std::mutex disparity_mutex;
     std::shared_ptr<std::vector<uint8_t>> disparity_frame;
     std::condition_variable imu_condition;
@@ -48,6 +55,7 @@ struct UiState
     std::chrono::steady_clock::time_point rate_window_start{};
     std::chrono::steady_clock::time_point last_image_event{};
     std::chrono::steady_clock::time_point last_imu_event{};
+    std::deque<cb_imu_sample> imu_preview;
     std::string control_port;
     std::string debug_port;
     std::string device_name;

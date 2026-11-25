@@ -79,6 +79,17 @@
                         生成彩色稠密地图。运行期间关闭 SDK 的 IMU
                         上传，相机继续使用 IMU 进行定位。
                     </p>
+                    <label class="processing-switch"
+                        ><span>电梯运动估计</span><input
+                            id="elevator-enabled"
+                            type="checkbox"
+                            role="switch"
+                            disabled
+                        /><span class="switch-track" aria-hidden="true"></span></label
+                    >
+                    <p id="elevator-hint" class="hint">
+                        默认关闭，可在运行中切换。
+                    </p>
                     <div class="actions">
                         <button
                             id="start"
@@ -135,6 +146,12 @@
                         />实时位姿视锥</label
                     ><label
                         ><input
+                            id="show-trajectory"
+                            type="checkbox"
+                            checked
+                        />运动轨迹</label
+                    ><label
+                        ><input
                             id="show-keyframes"
                             type="checkbox"
                             checked
@@ -158,6 +175,9 @@
                             type="checkbox"
                         />暂停显示</label
                     >
+                    <p class="hint">
+                        轨迹按 20 Hz 记录，最多保留 60,000 点（约 50 分钟），旧点自动淘汰。关闭显示后继续记录。
+                    </p>
                     <div class="actions">
                         <button id="home">复位视角</button
                         ><button id="top">俯视</button
@@ -187,11 +207,14 @@
             <div class="center">
                 <div class="scene-toolbar">
                     <span>MAP · Z UP</span
-                    ><span><i class="green"></i>实时位姿 · 黄色关键帧</span
+                    ><span><i class="green"></i>实时位姿 · 黄色关键帧 · 蓝色轨迹</span
                     ><span id="point-count">0 点 · 0 关键帧视锥</span>
                 </div>
                 <div id="scene">
                     <div id="scene-message">正在等待 SDK 连接</div>
+                    <div id="map-scale" title="比例尺以观察中心所在深度为准" hidden>
+                        <span id="map-scale-label"></span><i id="map-scale-line"></i>
+                    </div>
                 </div>
                 <div class="pose-bar">
                     <div><small>位置 · m</small><b id="position">—</b></div>
@@ -202,6 +225,10 @@
                     <div><small>速度 · m/s</small><b id="velocity">—</b></div>
                 </div>
                 <section class="diagnostics">
+                    <div class="imu-preview-status">
+                        <span id="imu-preview-status">等待 IMU 数据</span>
+                        <button id="enable-imu" type="button" hidden>启用 IMU 曲线</button>
+                    </div>
                     <div>
                         <h2>陀螺仪 · rad/s</h2>
                         <canvas id="gyro"></canvas>
@@ -210,21 +237,6 @@
                         <h2>加速度 · m/s²</h2>
                         <canvas id="accel"></canvas>
                     </div>
-                    <dl>
-                        <dt>处理耗时</dt>
-                        <dd id="processing">—</dd>
-                        <dt>SoC 温度</dt>
-                        <dd id="board-temperature" title="板端 SoC 当前温度">
-                            —
-                        </dd>
-                        <dt>大核频率</dt>
-                        <dd
-                            id="cpu-frequency"
-                            title="CPU 大核当前频率"
-                        >
-                            —
-                        </dd>
-                    </dl>
                 </section>
             </div>
             <aside class="right">

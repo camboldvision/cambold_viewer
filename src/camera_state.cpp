@@ -64,6 +64,7 @@ void host_event(const cb_event *event, void *user)
         state->last_result = "control protocol disconnected; reconnecting";
         state->device_config = {};
         state->stereo_status = {};
+        state->imu_preview.clear();
         {
             std::lock_guard<std::mutex> frame_lock(state->disparity_mutex);
             state->disparity_frame.reset();
@@ -71,8 +72,29 @@ void host_event(const cb_event *event, void *user)
         state->imu_enable_result = -ENOTCONN;
         state->imu_enable_completed = true;
         state->imu_condition.notify_all();
+        if (state->stereo_enable_request && !state->stereo_enable_completed)
+        {
+            state->stereo_enable_result = -ENOTCONN;
+            state->stereo_enable_completed = true;
+        }
+        if (state->stereo_config_request && !state->stereo_config_completed)
+        {
+            state->stereo_config_result = -ENOTCONN;
+            state->stereo_config_completed = true;
+        }
         break;
     case CB_EVENT_RESULT:
+        if (state->stereo_enable_request && event->request_id == state->stereo_enable_request &&
+            event->result != 0)
+        {
+            state->stereo_enable_result = event->result;
+            state->stereo_enable_completed = true;
+        }
+        if (state->stereo_config_request && event->request_id == state->stereo_config_request)
+        {
+            state->stereo_config_result = event->result;
+            state->stereo_config_completed = true;
+        }
         state->last_result = "request result: " + std::to_string(event->result);
         if (event->text && event->text[0])
             state->last_result += " " + std::string(event->text);
@@ -93,6 +115,8 @@ void host_event(const cb_event *event, void *user)
         break;
     case CB_EVENT_IMU_STATUS:
         state->imu_enabled = event->enabled != 0;
+        if (!state->imu_enabled)
+            state->imu_preview.clear();
         if (state->imu_enable_request != 0 && event->request_id == state->imu_enable_request &&
             !state->imu_enable_completed)
         {
@@ -116,6 +140,20 @@ void host_event(const cb_event *event, void *user)
         break;
     }
     case CB_EVENT_STEREO_STATUS:
+        if (state->stereo_enable_request && event->request_id == state->stereo_enable_request)
+        {
+            state->stereo_enable_result = event->result;
+            state->stereo_enable_completed = true;
+        }
+        if (state->stereo_config_request && event->request_id == state->stereo_config_request)
+        {
+            state->stereo_config_status_received = event->result == 0;
+            if (event->result != 0)
+            {
+                state->stereo_config_result = event->result;
+                state->stereo_config_completed = true;
+            }
+        }
         if (event->result == 0)
         {
             cb_stereo_status info{};
@@ -145,6 +183,15 @@ void host_event(const cb_event *event, void *user)
         {
             state->rate_imu_count += count;
             state->last_imu_event = now;
+            std::vector<cb_imu_sample> samples(count);
+            size_t capacity = samples.size();
+            if (cb_decode_imu_batch(event->payload, event->payload_size, samples.data(),
+                                    &capacity) != 0)
+                break;
+            for (size_t i = 0; i < capacity; ++i)
+                state->imu_preview.push_back(samples[i]);
+            while (state->imu_preview.size() > 400)
+                state->imu_preview.pop_front();
 #if CB_VIEWER_ROSBAG
             /* The local recorder is owned by the desktop executable.  The C
              * SDK only decodes the transport event; it does not know that a
@@ -152,14 +199,8 @@ void host_event(const cb_event *event, void *user)
             if (state->local_bag_writer && state->local_bag_writer->active() &&
                 state->local_bag_writer->record_imu())
             {
-                std::vector<cb_imu_sample> samples(count);
-                size_t capacity = samples.size();
-                if (cb_decode_imu_batch(event->payload, event->payload_size, samples.data(),
-                                        &capacity) == 0)
-                {
-                    for (size_t i = 0; i < capacity; ++i)
-                        state->local_bag_writer->submit_imu(samples[i]);
-                }
+                for (size_t i = 0; i < capacity; ++i)
+                    state->local_bag_writer->submit_imu(samples[i]);
             }
 #endif
         }

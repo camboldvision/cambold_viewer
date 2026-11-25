@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <cwchar>
 #include <algorithm>
+#include <cerrno>
 #include <stdexcept>
 #ifdef _WIN32
 #include <commdlg.h>
@@ -13,6 +14,14 @@ namespace cambold::viewer
 {
 namespace
 {
+
+bool camera_configuration_locked(const nlohmann::json &state)
+{
+    const auto phase = state.value("state", std::string());
+    return state.value("connection", std::string()) == "READY" &&
+           (phase == "STARTING" || phase == "CONFIGURING_CAMERA" ||
+            phase == "INITIALIZING" || phase == "RUNNING" || phase == "STOPPING");
+}
 
 std::string base64_encode(const uint8_t *data, size_t size)
 {
@@ -87,11 +96,18 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                 }
                 if (request.value("preview", true)) {
                     cb_calibration_preview info{};
-                    std::vector<uint8_t> jpeg(256 * 1024);
-                    size_t size = jpeg.size();
-                    rc =
-                        cb_get_calibration_preview(state_.host, request.value("after", uint64_t(0)),
-                                                   &info, jpeg.data(), &size);
+                    std::vector<uint8_t> jpeg;
+                    size_t size = 0;
+                    // Query the actual size, then retry if a larger frame arrives
+                    // between the size query and the copy.
+                    for (int attempt = 0; attempt < 3; ++attempt) {
+                        size = jpeg.size();
+                        rc = cb_get_calibration_preview(
+                            state_.host, request.value("after", uint64_t(0)),
+                            &info, jpeg.data(), &size);
+                        if (rc != -ENOSPC) break;
+                        jpeg.resize(size);
+                    }
                     if (!rc) {
                         result["jpeg"] = base64_encode(jpeg.data(), size);
                         result["sequence"] = info.sequence;
@@ -155,10 +171,31 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                                   throw;
                               }
                               cb_slam_free_json(data);
+                              const bool blocked = cb_slam_imu_upload_blocked(state_.host) > 0;
+                              std::lock_guard<std::mutex> lock(state_.mutex);
+                              auto &scene = result["data"];
+                              scene["imu"] = nlohmann::json::array();
+                              const auto now = std::chrono::steady_clock::now();
+                              const bool fresh = state_.last_imu_event.time_since_epoch().count() &&
+                                  now - state_.last_imu_event < std::chrono::seconds(1);
+                              scene["imu_status"] =
+                                  state_.connection != ConnectionState::Online ? "offline" :
+                                  blocked ? "dense" : !state_.imu_enabled ? "disabled" :
+                                  fresh ? "live" : "waiting";
+                              if (!blocked && state_.imu_enabled && fresh)
+                                  for (const auto &sample : state_.imu_preview)
+                                      scene["imu"].push_back({
+                                          double(sample.timestamp_monotonic_ns) * 1e-9,
+                                          sample.gyro[0], sample.gyro[1], sample.gyro[2],
+                                          sample.accel[0], sample.accel[1], sample.accel[2]});
+                              state_.imu_preview.clear();
                           }
                       }
                       else if (action == "maps")
                           status = cb_slam_refresh_maps(state_.host);
+                      else if (action == "enable_imu")
+                          status = cb_set_imu_output(state_.host, 1,
+                                                    cb_next_request_id(state_.host));
                       else if (action == "subscribe")
                           status = cb_slam_subscribe(state_.host, request.value("images", false),
                                                      request.value("dense", true));
@@ -175,6 +212,9 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                           const auto command = request.at("command").get<std::string>();
                           if (command == "STOP")
                               status = cb_slam_stop(state_.host);
+                          else if (command == "SET_ELEVATOR")
+                              status = cb_slam_set_elevator(
+                                  state_.host, request.at("args").at("enabled").get<bool>());
                           else if (command == "SET_PROCESSING")
                           {
                               const auto args = request.at("args");
@@ -224,7 +264,29 @@ void ViewerApplication::bind(choc::ui::WebView &view)
     view.bind("host_get_state",
               [this](const choc::value::ValueView &)
               {
+                  // A snapshot leaves the SLAM page's map/IMU queues untouched.
+                  double big_mhz = 0.0;
+                  bool configuration_locked = false;
+                  char *snapshot = nullptr;
+                  if (state_.host && cb_slam_get_json(state_.host, &snapshot) == 0)
+                  {
+                      const auto data = nlohmann::json::parse(snapshot, nullptr, false);
+                      cb_slam_free_json(snapshot);
+                      if (data.is_object() && data.contains("state"))
+                      {
+                          const auto &telemetry = data["state"];
+                          configuration_locked = camera_configuration_locked(telemetry);
+                          if (telemetry.value("connection", std::string()) == "READY" &&
+                              telemetry.contains("cpu_big_current_mhz") &&
+                              telemetry["cpu_big_current_mhz"].is_number())
+                              big_mhz = telemetry["cpu_big_current_mhz"].get<double>();
+                      }
+                  }
                   std::lock_guard<std::mutex> lock(state_.mutex);
+                  const auto metrics = nlohmann::json::parse(state_.metrics, nullptr, false);
+                  if (metrics.is_object() && metrics.contains("cpu_big_current_mhz") &&
+                      metrics["cpu_big_current_mhz"].is_number())
+                      big_mhz = metrics["cpu_big_current_mhz"].get<double>();
                   auto result = choc::value::createObject("state");
                   update_rates_locked(&state_, std::chrono::steady_clock::now());
                   result.setMember("connected", state_.connection == ConnectionState::Online);
@@ -250,6 +312,7 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                   stereo.setMember("focal", state_.stereo_status.focal_px);
                   stereo.setMember("projection", (int)state_.stereo_status.projection);
                   stereo.setMember("vertical_fov", state_.stereo_status.vertical_fov_deg);
+                  stereo.setMember("cy", state_.stereo_status.cy);
                   stereo.setMember(
                       "modes",
                       choc::value::createArray(state_.stereo_status.mode_count,
@@ -268,6 +331,19 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                   result.setMember("image_fps", state_.image_fps);
                   result.setMember("imu_fps", state_.imu_fps);
                   result.setMember("metrics", state_.metrics);
+                  result.setMember("cpu_big_current_mhz", big_mhz);
+                  result.setMember("stereo_config_locked", configuration_locked);
+                  auto config_reply = choc::value::createObject("stereo_config_reply");
+                  config_reply.setMember("request_id", std::to_string(state_.stereo_config_request));
+                  config_reply.setMember("completed", state_.stereo_config_completed);
+                  config_reply.setMember("status_received", state_.stereo_config_status_received);
+                  config_reply.setMember("result", state_.stereo_config_result);
+                  result.setMember("stereo_config_reply", config_reply);
+                  auto enable_reply = choc::value::createObject("stereo_enable_reply");
+                  enable_reply.setMember("request_id", std::to_string(state_.stereo_enable_request));
+                  enable_reply.setMember("completed", state_.stereo_enable_completed);
+                  enable_reply.setMember("result", state_.stereo_enable_result);
+                  result.setMember("stereo_enable_reply", enable_reply);
                   result.setMember("last_result", state_.last_result);
                   result.setMember("last_error", state_.last_error);
                   result.setMember("native_uvc", state_.native_uvc);
@@ -283,24 +359,76 @@ void ViewerApplication::bind(choc::ui::WebView &view)
     view.bind("host_set_stereo",
               [this](const choc::value::ValueView &args)
               {
+                  auto reply = choc::value::createObject("stereo_enable_result");
+                  reply.setMember("ok", false);
+                  reply.setMember("result", -ENOTCONN);
                   if (!state_.host || args.size() < 1)
-                      return choc::value::Value(false);
-                  return choc::value::Value(
-                      cb_set_disparity_enabled(state_.host, args[0].getWithDefault<int>(0),
-                                               cb_next_request_id(state_.host)) == 0);
+                      return reply;
+                  const auto id = cb_next_request_id(state_.host);
+                  {
+                      std::lock_guard<std::mutex> lock(state_.mutex);
+                      state_.stereo_enable_request = id;
+                      state_.stereo_enable_completed = false;
+                      state_.stereo_enable_result = 0;
+                  }
+                  const int status = cb_set_disparity_enabled(
+                      state_.host, args[0].getWithDefault<int>(0), id);
+                  if (status)
+                  {
+                      std::lock_guard<std::mutex> lock(state_.mutex);
+                      state_.stereo_enable_completed = true;
+                      state_.stereo_enable_result = status;
+                  }
+                  reply.setMember("ok", status == 0);
+                  reply.setMember("result", status);
+                  reply.setMember("request_id", std::to_string(id));
+                  return reply;
               });
     view.bind("host_configure_stereo",
               [this](const choc::value::ValueView &args)
               {
-                  if (!state_.host || args.size() < 2)
-                      return choc::value::Value(false);
-                  return choc::value::Value(
-                      cb_set_disparity_config_ex(
+                  auto reply = choc::value::createObject("stereo_config_result");
+                  reply.setMember("ok", false);
+                  reply.setMember("result", -ENOTCONN);
+                  if (!state_.host || args.size() < 5)
+                      return reply;
+                  char *snapshot = nullptr;
+                  if (cb_slam_get_json(state_.host, &snapshot) == 0)
+                  {
+                      const auto data = nlohmann::json::parse(snapshot, nullptr, false);
+                      cb_slam_free_json(snapshot);
+                      if (data.is_object() && data.contains("state") &&
+                          camera_configuration_locked(data["state"]))
+                      {
+                          reply.setMember("result", -EBUSY);
+                          return reply;
+                      }
+                  }
+                  const auto id = cb_next_request_id(state_.host);
+                  {
+                      std::lock_guard<std::mutex> lock(state_.mutex);
+                      state_.stereo_config_request = id;
+                      state_.stereo_config_completed = false;
+                      state_.stereo_config_status_received = false;
+                      state_.stereo_config_result = 0;
+                  }
+                  const int status = cb_set_disparity_config_with_cy(
                           state_.host, uint32_t(args[0].getWithDefault<int>(0)),
                           float(args[1].getWithDefault<double>(0)),
                           args.size() > 2 ? uint32_t(args[2].getWithDefault<int>(0)) : 0,
                           args.size() > 3 ? float(args[3].getWithDefault<double>(180)) : 180,
-                          cb_next_request_id(state_.host)) == 0);
+                          float(args[4].getWithDefault<double>(0)),
+                          id);
+                  if (status)
+                  {
+                      std::lock_guard<std::mutex> lock(state_.mutex);
+                      state_.stereo_config_completed = true;
+                      state_.stereo_config_result = status;
+                  }
+                  reply.setMember("ok", status == 0);
+                  reply.setMember("result", status);
+                  reply.setMember("request_id", std::to_string(id));
+                  return reply;
               });
     view.bind("host_start_uvc",
               [this](const choc::value::ValueView &)

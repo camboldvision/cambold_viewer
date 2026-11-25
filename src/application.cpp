@@ -132,16 +132,10 @@ void ViewerApplication::run()
 
     timer_ = std::make_unique<choc::messageloop::Timer>(
         250,
-        [this, ticks = 0u]() mutable
+        [this]()
         {
             ensure_host();
             update_port_snapshot();
-            if (state_.host && cb_connected(state_.host) && (++ticks % 4u) == 0u)
-            {
-                (void)cb_request_metrics(state_.host, cb_next_request_id(state_.host));
-                (void)cb_request_device_config(state_.host, cb_next_request_id(state_.host));
-                (void)cb_request_stereo_status(state_.host, cb_next_request_id(state_.host));
-            }
             return true;
         });
     choc::messageloop::run();
