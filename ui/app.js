@@ -149,8 +149,6 @@
         $("bag-imu").disabled = !!remote.imu_upload_blocked;
         if (remote.imu_upload_blocked) $("bag-imu").checked = false;
         $("imu-output").checked = !!(valid & 2) && !!remote.imu;
-        $("antenna").disabled = !(valid & 4);
-        $("antenna").value = valid & 4 ? (remote.antenna ? "1" : "0") : "";
         const rates =
             valid & 1 && Array.isArray(remote.frame_rates)
                 ? remote.frame_rates.filter(
@@ -311,9 +309,6 @@
 
     function bindControls() {
         $("preview-toggle").addEventListener("click", togglePreview);
-        $("antenna").addEventListener("change", () =>
-            invoke("host_set_antenna", Number($("antenna").value)),
-        );
         $("imu-output").addEventListener("change", () =>
             invoke("host_set_imu", $("imu-output").checked ? 1 : 0),
         );

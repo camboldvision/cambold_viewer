@@ -110,9 +110,6 @@ void host_event(const cb_event *event, void *user)
         if (event->text)
             state->metrics = event->text;
         break;
-    case CB_EVENT_ANTENNA:
-        state->antenna_wired = event->antenna_wired != 0;
-        break;
     case CB_EVENT_IMU_STATUS:
         state->imu_enabled = event->enabled != 0;
         if (!state->imu_enabled)
@@ -134,8 +131,6 @@ void host_event(const cb_event *event, void *user)
             state->device_config = config;
             if (config.valid_flags & CB_CONFIG_IMU_VALID)
                 state->imu_enabled = config.imu_output_enabled != 0;
-            if (config.valid_flags & CB_CONFIG_ANTENNA_VALID)
-                state->antenna_wired = config.antenna_wired != 0;
         }
         break;
     }

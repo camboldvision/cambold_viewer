@@ -294,7 +294,6 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                   result.setMember("control_port", state_.control_port);
                   result.setMember("debug_port", state_.debug_port);
                   result.setMember("device_name", state_.device_name);
-                  result.setMember("antenna", state_.antenna_wired);
                   result.setMember("imu", state_.imu_enabled);
                   result.setMember("imu_upload_blocked",
                                    state_.host && cb_slam_imu_upload_blocked(state_.host) > 0);
@@ -480,15 +479,6 @@ void ViewerApplication::bind(choc::ui::WebView &view)
                       return choc::value::Value(false);
                   return choc::value::Value(
                       cb_request_metrics(state_.host, cb_next_request_id(state_.host)) == 0);
-              });
-    view.bind("host_set_antenna",
-              [this](const choc::value::ValueView &args)
-              {
-                  if (!state_.host || args.size() < 1)
-                      return choc::value::Value(false);
-                  return choc::value::Value(cb_set_antenna(state_.host,
-                                                           args[0].getWithDefault<int>(0),
-                                                           cb_next_request_id(state_.host)) == 0);
               });
     view.bind("host_set_imu",
               [this](const choc::value::ValueView &args)

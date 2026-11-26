@@ -31,7 +31,6 @@ struct UiState
     std::mutex mutex;
     cb_t *host = nullptr;
     ConnectionState connection = ConnectionState::Offline;
-    bool antenna_wired = false;
     bool imu_enabled = false;
     cb_device_config device_config{};
     cb_stereo_status stereo_status{};
